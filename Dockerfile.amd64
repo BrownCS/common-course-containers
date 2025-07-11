@@ -18,7 +18,7 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
 # Copy courses-cli
-COPY courses-cli.sh /usr/local/bin/courses-cli
+COPY cscourse.sh /usr/local/bin/cscourse
 
 # Install packages
 RUN apt-get install -y \
