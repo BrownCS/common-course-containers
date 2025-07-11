@@ -4,26 +4,25 @@ set -e
 
 # Configuration
 BASE_DIR="/home/courses"
-COURSES_FILE="$BASE_DIR/courses.json"
-REMOTE="git@github.com:qiaochloe/unified-containers.git"
+COURSE_FILE="$BASE_DIR/courses.json"
+REMOTE_COURSE_FILE="https://raw.githubusercontent.com/qiaochloe/unified-containers/courses/courses/courses.json"
 
 # Downlaod courses.json from the remote repository
-# and save it in COURSES_FILE
+# and save it in COURSE_FILE
 download_courses_json() {
-  BRANCH="courses"
-  git archive --remote="$REMOTE" "$BRANCH" HEAD courses.json | tar -xO >"$COURSES_FILE"
+  curl -sSfL "$REMOTE_COURSE_FILE" -o "$COURSE_FILE"
 }
 
-# Given a course key, get the course URL from COURSES_FILE
+# Given a course key, get the course URL from COURSE_FILE
 get_course_url() {
   local course="$1"
-  jq -r --arg course "$course" '.[$course] // empty' "$COURSES_FILE"
+  jq -r --arg course "$course" '.[$course] // empty' "$COURSE_FILE"
 }
 
-# List courses in COURSES_FILE
+# List courses in COURSE_FILE
 list_courses() {
   echo "Available courses:"
-  jq -r 'keys_unsorted[]' "$COURSES_FILE" | sort | sed 's/^/  - /'
+  jq -r 'keys_unsorted[]' "$COURSE_FILE" | sort | sed 's/^/  - /'
 }
 
 usage() {
@@ -75,8 +74,14 @@ main() {
   fi
 
   local course="$2"
+  local repo_url=$(get_course_url "$course")
 
-  clone_or_update_repo "$course"
+  if [[ -z "$repo_url" ]]; then
+    echo "Unknown course: $course"
+    usage
+  fi
+
+  clone_or_update_repo "$course" "$repo_url"
   run_setup_script "$course"
 }
 
