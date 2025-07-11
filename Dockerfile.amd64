@@ -17,9 +17,6 @@ RUN apt-get update && \
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-# Set up sources (for ARM64)
-COPY --chown=root:root sources.list /etc/apt/sources.list
-
 # Install Git, Neovim
 RUN apt-get install -y \
   sudo \
@@ -30,17 +27,6 @@ RUN apt-get install -y \
   wget \
   curl \
   xxd
-
-# Install sudo and give sudo-user passwordless root access
-# RUN apt-get update && \
-#     apt-get install -y sudo && \
-#     rm -rf /var/lib/apt/lists/*
-#
-# RUN useradd -ms /bin/bash root && \
-#     echo "sudo-user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sudo-user && \
-#     chmod 0440 /etc/sudoers.d/sudo-user
-#
-# USER sudo-user
 
 USER root
 

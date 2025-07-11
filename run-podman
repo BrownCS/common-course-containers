@@ -2,7 +2,6 @@
 #set -euox
 
 # Set variables
-CONTAINERFILE_PATH="./Dockerfile"
 IMAGE_NAME="cs-courses"
 CONTAINER_NAME="cs-courses"
 CONTAINER_RUNTIME="podman"
@@ -11,8 +10,10 @@ NETWORK_NAME=net-cs-courses
 ARCH="$(uname -m)"
 if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
   PLATFORM="linux/arm64"
+  CONTAINERFILE_PATH="./Dockerfile.arm64"
 else
   PLATFORM="linux/amd64"
+  CONTAINERFILE_PATH="./Dockerfile.amd64"
 fi
 
 # MORE OPTIONS

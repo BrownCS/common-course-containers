@@ -1,34 +1,36 @@
-# TODO: LABEL
-
 # Define a base for the image
 # noble is the latest LTS release
-FROM ubuntu:noble
+# jammy is the current release supported by GradeScope
+FROM ubuntu:jammy
 
 # Avoid interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install sudo and any build dependencies
+# Set up environment
+ENV TZ=America/New_York
+
+# Set up locale
 RUN apt-get update && \
-    apt-get install -y sudo && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y locales && \
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Set up sources (for ARM64)
+COPY --chown=root:root sources.list /etc/apt/sources.list
 
 # Install Git, Neovim
-RUN apt-get update && apt-get install -y \
+RUN apt-get install -y \
+  sudo \
   git \
-  neovim
+  vim \
+  neovim \
+  nano \
+  wget \
+  curl \
+  xxd
 
-# Install sudo and create non-root user
-RUN useradd -ms /bin/bash sudo-user && \
-    echo "sudo-user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sudo-user && \
-    chmod 0440 /etc/sudoers.d/sudo-user
-
-USER sudo-user
-
-# Container set ups from CS300
-# COPY container-setup-arm64.sh /usr/local/bin/container-setup-arm64
-# COPY container-setup-common.sh /usr/local/bin/container-setup-common
-
-# copy new sources.list
-# COPY --chown=root:root ubuntu-arm64-cross.sources /etc/apt/sources.list.d/ubuntu.sources
+USER root
 
 CMD [ "bash" ]
