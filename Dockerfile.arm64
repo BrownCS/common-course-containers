@@ -17,10 +17,13 @@ RUN apt-get update && \
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
+# Copy courses-cli
+COPY courses-cli.sh /usr/local/bin/courses-cli
+
 # Set up sources (for ARM64)
 COPY --chown=root:root sources.list /etc/apt/sources.list
 
-# Install Git, Neovim
+# Install packages
 RUN apt-get install -y \
   sudo \
   git \
@@ -29,7 +32,8 @@ RUN apt-get install -y \
   nano \
   wget \
   curl \
-  xxd
+  xxd \
+  jq
 
 USER root
 

@@ -3,25 +3,41 @@
 set -e
 
 # Configuration
-REPO_BASE_DIR="/home/courses"
+BASE_DIR="/home/courses"
+COURSES_FILE="$BASE_DIR/courses.json"
+REMOTE="git@github.com:qiaochloe/unified-containers.git"
 
-declare -A COURSE_REPOS=(
-  ["300"]="https://github.com/csci0300/cs300-s24-devenv.git"
-)
+# Downlaod courses.json from the remote repository
+# and save it in COURSES_FILE
+download_courses_json() {
+  BRANCH="courses"
+  git archive --remote="$REMOTE" "$BRANCH" HEAD courses.json | tar -xO >"$COURSES_FILE"
+}
+
+# Given a course key, get the course URL from COURSES_FILE
+get_course_url() {
+  local course="$1"
+  jq -r --arg course "$course" '.[$course] // empty' "$COURSES_FILE"
+}
+
+# List courses in COURSES_FILE
+list_courses() {
+  echo "Available courses:"
+  jq -r 'keys_unsorted[]' "$COURSES_FILE" | sort | sed 's/^/  - /'
+}
 
 usage() {
   echo "Usage: $0 setup <course-name>"
-  echo "Available courses:"
-  for course in $(printf "%s\n" "${!COURSE_REPOS[@]}" | sort); do
-    echo "  - $course"
-  done
+  list_courses
   exit 1
 }
 
 clone_or_update_repo() {
+  download_courses_json
+
   local course=$1
-  local repo_url=${COURSE_REPOS[$course]}
-  local course_dir="$REPO_BASE_DIR/$course"
+  local repo_url=$2
+  local course_dir="$BASE_DIR/$course"
 
   if [[ -z "$repo_url" ]]; then
     echo "Error: Unknown course '$course'"
@@ -33,14 +49,14 @@ clone_or_update_repo() {
     git -C "$course_dir" pull
   else
     echo "Cloning $course repo..."
-    mkdir -p "$REPO_BASE_DIR"
+    mkdir -p "$BASE_DIR"
     git clone "$repo_url" "$course_dir"
   fi
 }
 
 run_setup_script() {
   local course=$1
-  local course_dir="$REPO_BASE_DIR/$course"
+  local course_dir="$BASE_DIR/$course"
   local script="$course_dir/setup.sh"
 
   if [[ ! -f "$script" ]]; then
