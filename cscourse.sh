@@ -5,7 +5,7 @@ set -e
 # Configuration
 BASE_DIR="/home/courses"
 COURSE_FILE="$BASE_DIR/courses.json"
-REMOTE_COURSE_FILE="https://raw.githubusercontent.com/qiaochloe/unified-containers/courses/courses/courses.json"
+REMOTE_COURSE_FILE="https://raw.githubusercontent.com/qiaochloe/unified-containers/courses/courses.json"
 
 # Downlaod courses.json from the remote repository
 # and save it in COURSE_FILE

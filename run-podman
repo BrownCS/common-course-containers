@@ -1,19 +1,21 @@
 #!/bin/bash
 #set -euox
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
 # Set variables
 IMAGE_NAME="cs-courses"
 CONTAINER_NAME="cs-courses"
 CONTAINER_RUNTIME="podman"
-VOLUME_PATH="/Users/qiaochloe/Documents/college/extracurriculars/spoc/project/courses"
+VOLUME_PATH="$SCRIPT_DIR/courses"
 NETWORK_NAME=net-cs-courses
 ARCH="$(uname -m)"
 if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
   PLATFORM="linux/arm64"
-  CONTAINERFILE_PATH="./Dockerfile.arm64"
+  CONTAINERFILE_PATH="$SCRIPT_DIR/Dockerfile.arm64"
 else
   PLATFORM="linux/amd64"
-  CONTAINERFILE_PATH="./Dockerfile.amd64"
+  CONTAINERFILE_PATH="$SCRIPT_DIR/Dockerfile.amd64"
 fi
 
 # MORE OPTIONS
