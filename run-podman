@@ -1,0 +1,307 @@
+#!/bin/bash
+#set -euox
+
+# Set variables
+CONTAINERFILE_PATH="./Dockerfile"
+IMAGE_NAME="cs-courses"
+CONTAINER_NAME="cs-courses"
+CONTAINER_RUNTIME="podman"
+VOLUME_PATH="/Users/qiaochloe/Documents/college/extracurriculars/spoc/project/courses"
+NETWORK_NAME=net-cs-courses
+ARCH="$(uname -m)"
+if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+  PLATFORM="linux/arm64"
+else
+  PLATFORM="linux/amd64"
+fi
+
+# MORE OPTIONS
+use_graphics=true
+
+# Check if container runtime exists
+check_container_runtime() {
+  if command -v "$CONTAINER_RUNTIME" >/dev/null; then
+    return 0
+  fi
+
+  echo "Container runtime '$CONTAINER_RUNTIME' not found"
+  echo "Runtimes detected:"
+  echo "  Podman: $(command -v podman >/dev/null && echo YES || echo NO)"
+  echo "  Docker: $(command -v docker >/dev/null && echo YES || echo NO)"
+
+  while true; do
+    read -p "Which container runtime? (podman/docker): " runtime
+    if [[ $runtime == podman ]]; then
+      CONTAINER_RUNTIME=podman
+      echo "Using podman as container runtime."
+      break
+    elif [[ $runtime = docker ]]; then
+      CONTAINER_RUNTIME=docker
+      echo "Using docker as container runtime."
+      break
+    else
+      echo "Invalid choice. Please enter 'podman' or 'docker'."
+    fi
+  done
+
+  echo ""
+}
+
+# NETWORK
+# Check if network exists
+has_network() {
+  podman network inspect "$NETWORK_NAME" &>/dev/null
+}
+
+# Create network
+create_network() {
+  if has_network; then
+    echo "Network '$NETWORK_NAME' already exists. Skipping build."
+  else
+    echo "Creating container-local network '$NETWORK_NAME'..."
+    podman network create "$NETWORK_NAME"
+  fi
+}
+
+# XHOST
+# Add host name to allowed connections on X server
+# do_xhost <host name>
+xhost_warned=false
+do_xhost() {
+  arg=$@
+
+  if $(which xhost); then
+    xhost $@
+  else
+    if ! $xhost_warned; then
+      echo "Warning: xhost was not detected on your system. You may have issues running graphical apps like QEMU or Wireshark."
+      xhost_warned=true
+    fi
+  fi
+}
+
+# Set up xhost
+setup_xhost() {
+  # OS-specific handling for X11 forwarding
+  if test "$(uname)" = Linux; then
+    if grep -qi Microsoft /proc/version; then # Windows
+      true                                    # Nothing to do, configured in GUI outside WSL
+    else                                      # Native Linux
+      if test -n "$DISPLAY"; then
+        do_xhost +local:
+      else
+        # Don't bother doing anything if $DISPLAY isn't set--this might be a headless system
+        echo "$DISPLAY is not set, skipping X11 configuration"
+      fi
+    fi
+  elif test "$(uname)" = Darwin; then # Mac OS
+    do_xhost +localhost
+  fi
+}
+
+# IMAGE MANAGEMENT
+# Check if image exists
+has_image() {
+  podman image exists "$IMAGE_NAME" &>/dev/null
+}
+
+# Build the image
+build_image() {
+  if has_image; then
+    echo "Image '$IMAGE_NAME' already exists. Skipping build."
+    return 0
+  fi
+
+  echo "Building Podman image '$IMAGE_NAME' for $PLATFORM..."
+  podman build -t "$IMAGE_NAME" -f "$CONTAINERFILE_PATH" --platform "${PLATFORM}" .
+}
+
+# Remove the image
+remove_image() {
+  echo "Removing image '$IMAGE_NAME'..."
+  podman image rm --force "$IMAGE_NAME"
+}
+
+# CONTAINER MANAGEMENT
+# Check if container exists
+has_container() {
+  podman container exists "$CONTAINER_NAME" &>/dev/null
+}
+
+# Start a new container
+start_new_container() {
+  netarg=
+  # TODO:
+  # add_port_if_open 6169 # 300
+  # add_port_if_open 12949 # 300
+  # add_port_if_open 9269 # 1680
+
+  # SSH agent forwarding (macOS only)
+  ssharg=
+  sshenvarg=
+  if test -n "$SSH_AUTH_SOCK" -a "$(uname)" = Darwin; then
+    ssharg=" -v /run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock"
+    sshenvarg=" -e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock"
+  fi
+
+  # X11
+  x11arg=
+  x11envarg=
+  # TODO: check if this can be set up after making the container
+  # Add port forward for XPRA (backup display method)
+  # netarg="${netarg} -p 127.0.0.1:14500:14500"
+
+  # OS-specific handling for X11 forwarding
+  if test "$(uname)" = Linux; then
+    if grep -qi Microsoft /proc/version; then # Windows
+      x11arg=""
+      x11envarg="-e DISPLAY=host.docker.internal:0"
+    else # Native Linux
+      if test -n "$DISPLAY"; then
+        x11arg="-v /tmp/.X11-unix:/tmp/.X11-unix"
+        x11envarg="-e DISPLAY=unix$DISPLAY"
+      else
+        # Don't bother doing anything if $DISPLAY isn't set--this might be a headless system
+        echo "$DISPLAY is not set, skipping X11 configuration"
+      fi
+    fi
+  elif test "$(uname)" = Darwin; then # Mac OS
+    x11arg=""
+    x11envarg="-e DISPLAY=host.docker.internal:0"
+  fi
+
+  # Add any necessary xhost configs
+  setup_xhost
+
+  # Create network if it doesn't exist
+  create_network
+
+  # Create the container
+  echo "Creating and starting container '$CONTAINER_NAME'..."
+  podman run -it \
+    --name "$CONTAINER_NAME" \
+    --platform "$PLATFORM" \
+    --network "${NETWORK_NAME}" \
+    --privileged \
+    --userns=keep-id \
+    --entrypoint /bin/bash \
+    --security-opt seccomp=unconfined \
+    --cap-add=SYS_PTRACE \
+    --cap-add=NET_ADMIN \
+    --volume "$VOLUME_PATH":/home/courses \
+    --workdir /home/courses \
+    $sshenvarg \
+    $netarg \
+    $x11arg $x11envarg \
+    "$IMAGE_NAME"
+}
+
+# Start or attach to an existing container
+start_container() {
+  STATUS=$(podman inspect -f '{{.State.Status}}' "$CONTAINER_NAME")
+  if [[ "$STATUS" == "running" ]]; then
+    echo "Container '$CONTAINER_NAME' is already running. Attaching..."
+    podman exec -it "$CONTAINER_NAME" bash
+  else
+    echo "Container '$CONTAINER_NAME' exists but is not running. Starting..."
+    podman start -ai "$CONTAINER_NAME"
+  fi
+}
+
+# Create, start, or attach to a container
+run_container() {
+  if has_container; then
+    start_container
+  else
+    start_new_container
+  fi
+}
+
+# Remove the container
+remove_containers() {
+  local _name
+  _name="${1:-${CONTAINER_NAME}}"
+  echo "Removing all existing '$CONTAINER_NAME' containers..."
+  podman ps -a -f name=${_name} --format "{{.ID}}" | while read line; do podman rm --force $line; done
+}
+
+# Show the help screen
+usage() {
+  cat <<EOF
+Usage $0:
+Commands:
+ build              Build the image locally
+ run                Build the image and run the container
+ clean              Remove container and image
+ clean-image        Remove image
+ clean-container    Remove container
+ help               Show this screen
+
+If no command is specified, the default is 'run'.
+EOF
+}
+
+# Display information before building or running
+info() {
+  check_container_runtime
+
+  echo "Image: $IMAGE_NAME"
+  echo "Container: $CONTAINER_NAME"
+  echo "Volume: $VOLUME_PATH"
+  echo "Network: $NETWORK_NAME"
+  echo "Arch: $ARCH"
+  echo "Runtime: $CONTAINER_RUNTIME"
+  echo ""
+
+  echo "Has runtime?" $(echo YES)
+  echo "Built image? $(has_image && echo YES || echo NO)"
+  echo "Set up container? $(has_container && echo YES || echo NO)"
+  echo "Created network? $(has_network && echo YES || echo NO)"
+  echo ""
+}
+
+# Main script
+main() {
+  command="${1:-}"
+
+  # Default if command not provided
+  if [ -z "$command" ]; then
+    info
+    build_image
+    run_container
+    exit 0
+  fi
+
+  # Handle commands
+  case "$command" in
+  build)
+    info
+    build_image
+    ;;
+  run)
+    info
+    build_image
+    run_container
+    ;;
+  clean)
+    remove_containers
+    remove_image
+    ;;
+  clean-container)
+    remove_containers
+    ;;
+  clean-image)
+    remove_image
+    ;;
+  -h | --help | help)
+    usage
+    ;;
+  *)
+    echo "Invalid command $1"
+    usage
+    exit 1
+    ;;
+  esac
+}
+
+main "$@"

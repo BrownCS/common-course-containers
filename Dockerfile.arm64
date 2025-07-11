@@ -1,0 +1,34 @@
+# TODO: LABEL
+
+# Define a base for the image
+# noble is the latest LTS release
+FROM ubuntu:noble
+
+# Avoid interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install sudo and any build dependencies
+RUN apt-get update && \
+    apt-get install -y sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Git, Neovim
+RUN apt-get update && apt-get install -y \
+  git \
+  neovim
+
+# Install sudo and create non-root user
+RUN useradd -ms /bin/bash sudo-user && \
+    echo "sudo-user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/sudo-user && \
+    chmod 0440 /etc/sudoers.d/sudo-user
+
+USER sudo-user
+
+# Container set ups from CS300
+# COPY container-setup-arm64.sh /usr/local/bin/container-setup-arm64
+# COPY container-setup-common.sh /usr/local/bin/container-setup-common
+
+# copy new sources.list
+# COPY --chown=root:root ubuntu-arm64-cross.sources /etc/apt/sources.list.d/ubuntu.sources
+
+CMD [ "bash" ]
