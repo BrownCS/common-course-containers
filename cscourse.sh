@@ -14,7 +14,7 @@ REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main
 
 # Download courses.json from the remote repository
 # and save it in COURSE_MAP
-download_course_map() {
+update_course_map() {
   curl -sSfL "$REMOTE_COURSE_MAP" -o "$COURSE_MAP"
 }
 
@@ -26,6 +26,7 @@ get_course_url() {
 
 # List courses in COURSE_MAP
 list_courses() {
+  update_course_map
   echo "Available courses:"
   jq -r 'keys_unsorted[]' "$COURSE_MAP" | sort | sed 's/^/  - /'
 }
@@ -37,8 +38,6 @@ usage() {
 }
 
 clone_or_update_repo() {
-  download_course_map
-
   local course=$1
   local repo_url=$2
   local course_dir="$BASE_DIR/$course"
@@ -74,7 +73,7 @@ run_setup_script() {
 }
 
 # Update cscourse.sh with the latest version from remote repository
-update() {
+update_self() {
   echo "Checking for latest version of cscourse..."
   TMPFILE=$(mktemp)
   if curl -sSfL "$REMOTE_SELF" -o "$TMPFILE"; then
@@ -94,7 +93,7 @@ update() {
 main() {
   # cscourse update
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
-    update
+    update_self
     exit 0
   fi
 
