@@ -12,31 +12,13 @@ REMOTE_COURSE_MAP="https://raw.githubusercontent.com/qiaochloe/unified-container
 SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
 
-# Download courses.json from the remote repository
-# and save it in COURSE_MAP
-update_course_map() {
-  curl -sSfL "$REMOTE_COURSE_MAP" -o "$COURSE_MAP"
-}
-
 # Given a course key, get the course URL from COURSE_MAP
 get_course_url() {
   local course="$1"
   jq -r --arg course "$course" '.[$course] // empty' "$COURSE_MAP"
 }
 
-# List courses in COURSE_MAP
-list_courses() {
-  update_course_map
-  echo "Available courses:"
-  jq -r 'keys_unsorted[]' "$COURSE_MAP" | sort | sed 's/^/  - /'
-}
-
-usage() {
-  echo "Usage: $0 setup <course-name>"
-  list_courses
-  exit 1
-}
-
+# Given a course name and a course repo url, download the repo
 clone_or_update_repo() {
   local course=$1
   local repo_url=$2
@@ -57,6 +39,7 @@ clone_or_update_repo() {
   fi
 }
 
+# Given a course name, run the setup script
 run_setup_script() {
   local course=$1
   local course_dir="$BASE_DIR/$course"
@@ -70,6 +53,11 @@ run_setup_script() {
   echo "Running setup for $course..."
   chmod +x "$script"
   "$script"
+}
+
+# Download update courses.json from the remote repo
+update_course_map() {
+  curl -sSfL "$REMOTE_COURSE_MAP" -o "$COURSE_MAP"
 }
 
 # Update cscourse.sh with the latest version from remote repository
@@ -88,6 +76,20 @@ update_self() {
     echo "Failed to check for update"
   fi
   rm -f "$TMPFILE"
+}
+
+# Usage
+usage() {
+  echo "Usage $0:"
+  echo "Commands:"
+  echo " setup <course>   Clone and run course setup"
+  echo " update           Update cscourse to the latest version"
+  echo ""
+
+  update_course_map
+  echo "Available courses:"
+  jq -r 'keys_unsorted[]' "$COURSE_MAP" | sort | sed 's/^/  - /'
+  exit 1
 }
 
 main() {
