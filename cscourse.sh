@@ -2,27 +2,32 @@
 
 set -e
 
-# Configuration
 BASE_DIR="/home/courses"
-COURSE_FILE="$BASE_DIR/courses.json"
-REMOTE_COURSE_FILE="https://raw.githubusercontent.com/qiaochloe/unified-containers/courses/courses.json"
 
-# Downlaod courses.json from the remote repository
-# and save it in COURSE_FILE
-download_courses_json() {
-  curl -sSfL "$REMOTE_COURSE_FILE" -o "$COURSE_FILE"
+# For setup
+COURSE_MAP="$BASE_DIR/courses.json"
+REMOTE_COURSE_MAP="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/courses/courses.json"
+
+# For self-update
+SELF="$(realpath "$0")"
+REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
+
+# Download courses.json from the remote repository
+# and save it in COURSE_MAP
+download_course_map() {
+  curl -sSfL "$REMOTE_COURSE_MAP" -o "$COURSE_MAP"
 }
 
-# Given a course key, get the course URL from COURSE_FILE
+# Given a course key, get the course URL from COURSE_MAP
 get_course_url() {
   local course="$1"
-  jq -r --arg course "$course" '.[$course] // empty' "$COURSE_FILE"
+  jq -r --arg course "$course" '.[$course] // empty' "$COURSE_MAP"
 }
 
-# List courses in COURSE_FILE
+# List courses in COURSE_MAP
 list_courses() {
   echo "Available courses:"
-  jq -r 'keys_unsorted[]' "$COURSE_FILE" | sort | sed 's/^/  - /'
+  jq -r 'keys_unsorted[]' "$COURSE_MAP" | sort | sed 's/^/  - /'
 }
 
 usage() {
@@ -32,7 +37,7 @@ usage() {
 }
 
 clone_or_update_repo() {
-  download_courses_json
+  download_course_map
 
   local course=$1
   local repo_url=$2
@@ -68,7 +73,32 @@ run_setup_script() {
   "$script"
 }
 
+# Update cscourse.sh with the latest version from remote repository
+update() {
+  echo "Checking for latest version of cscourse..."
+  TMPFILE=$(mktemp)
+  if curl -sSfL "$REMOTE_SELF" -o "$TMPFILE"; then
+    if ! cmp -s "$SELF" "$TMPFILE"; then
+      chmod +x "$TMPFILE"
+      cp "$TMPFILE" "$SELF"
+      echo "Updated to latest version"
+    else
+      echo "Already up to date"
+    fi
+  else
+    echo "Failed to check for update"
+  fi
+  rm -f "$TMPFILE"
+}
+
 main() {
+  # cscourse update
+  if [[ "$#" -eq 1 && "$1" == "update" ]]; then
+    update
+    exit 0
+  fi
+
+  # cscourse setup <course>
   if [[ "$#" -ne 2 || "$1" != "setup" ]]; then
     usage
   fi
