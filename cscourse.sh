@@ -45,7 +45,7 @@ log_course() {
 
 # Clone and run the setup script for a course
 setup_course() {
-  local course = "$1"
+  local course="$1"
 
   # Get the remote course repository URL from courses.json
   local course_repo=$(jq -r --arg course "$course" '.[$course] // empty' "$COURSE_MAP")
@@ -147,7 +147,10 @@ main() {
     exit 0
   fi
 
-  echo "Error: Invalid command"
+  if [[ "$#" -ge 1 ]]; then
+    echo "Error: Invalid command: $*"
+  fi
+
   usage
 }
 
