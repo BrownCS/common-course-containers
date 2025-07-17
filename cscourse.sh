@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-
 set -e
+
+VERSION="1.0.0"
 
 BASE_DIR="/home/courses"
 
@@ -14,6 +15,10 @@ REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main
 
 # Logging
 LOG="$BASE_DIR/metadata.log"
+
+get_version() {
+  grep -E '^VERSION=' "$1" | cut -d= -f2 | tr -d '"'
+}
 
 # Log downloaded courses
 log_course() {
@@ -92,7 +97,8 @@ update_self() {
     if ! cmp -s "$SELF" "$TMPFILE"; then
       chmod +x "$TMPFILE"
       cp "$TMPFILE" "$SELF"
-      echo "Updated to latest version"
+      local new_version=$(get_version "$TMPFILE")
+      echo "Updated to latest version $new_version"
     else
       echo "Already up to date"
     fi
@@ -126,6 +132,12 @@ main() {
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
     update_course_map
     update_self
+    exit 0
+  fi
+
+  # cscourse list
+  if [[ "$#" -eq 1 && "$1" == "list" ]]; then
+    list
     exit 0
   fi
 
