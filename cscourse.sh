@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 
 BASE_DIR="/home/courses"
 
@@ -130,8 +130,8 @@ usage() {
 main() {
   # cscourse update
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
-    update_course_map
     update_self
+    update_course_map
     exit 0
   fi
 
