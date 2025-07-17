@@ -28,7 +28,7 @@ log_course() {
 
   # Get the commit hash
   local commit="unknown"
-  if [[ -d "$course_dir/.git" ]]; then
+  if [[ -d "$dirpath/.git" ]]; then
     commit=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
   fi
 
@@ -36,7 +36,7 @@ log_course() {
   if [[ ! -f "$LOG" ]]; then
     echo "COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
   fi
-  echo "$course,$repo_url,$commit,$dirpath" >>"$LOG"
+  echo "$course,$course_repo,$commit,$dirpath" >>"$LOG"
 }
 
 # Clone and run the setup script for a course
@@ -111,7 +111,7 @@ list_courses() {
     exit 0
   fi
 
-  column -s, -t <"$log"
+  column -s, -t <"$LOG"
 }
 
 # Usage
