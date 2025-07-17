@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-VERSION="1.0.1"
-
+VERSION="1.0.2"
 BASE_DIR="/home/courses"
 
 # Setup
@@ -14,17 +13,43 @@ SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
 
 # Logging
-LOG="$BASE_DIR/metadata.csv"
+METADATA_DIR="$BASE_DIR/.cscourse"
+LOG="$METADATA_DIR/metadata.csv"
+ID_FILE="$METADATA_DIR/id.txt"
 
-get_version() {
-  grep -E '^VERSION=' "$1" | cut -d= -f2 | tr -d '"'
+init() {
+  # BASE_DIR
+  if [[ ! -d "$BASE_DIR" ]]; then
+    echo "$BASE_DIR does not exist. Did you change the name?"
+    exit 1
+  fi
+  if ! mountpoint -q "$BASE_DIR"; then
+    echo "$BASE_DIR is not a mountpoint. Did you mount the directory?"
+    exit 1
+  fi
+
+  # Course map
+  if [[ ! -s "$COURSE_MAP" ]]; then
+    echo '{}' >"$COURSE_MAP"
+  fi
+
+  mkdir -p "$METADATA_DIR"
+
+  if [[ ! -f "$LOG" ]]; then
+    touch "$LOG"
+    echo "ID,COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
+  fi
+  if [[ ! -f "$ID_FILE" ]]; then
+    echo 1 >"$ID_FILE"
+  fi
 }
 
 # Log downloaded courses
 log_course() {
-  local course="$1"
-  local course_repo="$2"
-  local dirpath="$3"
+  local id="$1"
+  local course="$2"
+  local course_repo="$3"
+  local dirpath="$4"
 
   # Get the commit hash
   local commit="unknown"
@@ -32,11 +57,7 @@ log_course() {
     commit=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
   fi
 
-  # Write header if file doesn't exist
-  if [[ ! -f "$LOG" ]]; then
-    echo "COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
-  fi
-  echo "$course,$course_repo,$commit,$dirpath" >>"$LOG"
+  echo "$id,$course,$course_repo,$commit,$dirpath" >>"$LOG"
 }
 
 # Clone and run the setup script for a course
@@ -65,8 +86,12 @@ setup_course() {
   mkdir -p "$BASE_DIR"
   git clone "$course_repo" "$dirpath"
 
+  # Get and increment the ID
+  local id=$(<"$ID_FILE")
+  echo $((id + 1)) >"$ID_FILE"
+
   # Log the course
-  log_course "$course" "$course_repo" "$dirpath"
+  log_course "$id" "$course" "$course_repo" "$dirpath"
 
   # Run the setup script
   local script="$dirpath/setup.sh"
@@ -77,7 +102,7 @@ setup_course() {
 
   echo "Running setup for $course..."
   chmod +x "$script"
-  "$script"
+  sandbox "$id" "$script"
 }
 
 # Download update courses.json from the remote repo
@@ -93,7 +118,7 @@ update_self() {
     if ! cmp -s "$SELF" "$TMPFILE"; then
       chmod +x "$TMPFILE"
       cp "$TMPFILE" "$SELF"
-      local new_version=$(get_version "$TMPFILE")
+      local new_version=$(grep -E '^VERSION=' "$TMPFILE" | cut -d= -f2 | tr -d '"')
       echo "Updated to latest version $new_version"
     else
       echo "Already up to date"
@@ -129,6 +154,8 @@ usage() {
 }
 
 main() {
+  init
+
   # cscourse update
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
     update_self
@@ -156,3 +183,4 @@ main() {
 }
 
 main "$@"
+
