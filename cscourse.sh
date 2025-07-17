@@ -33,10 +33,10 @@ log_course() {
   fi
 
   # Write header if file doesn't exist
-  if [[ ! -f "$log_file" ]]; then
+  if [[ ! -f "$LOG" ]]; then
     echo "COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
   fi
-  echo "$course,$repo_url,$commit,$dirpath" >>"$log_file"
+  echo "$course,$repo_url,$commit,$dirpath" >>"$LOG"
 }
 
 # Clone and run the setup script for a course
