@@ -4,49 +4,73 @@ set -e
 
 BASE_DIR="/home/courses"
 
-# For setup
+# Setup
 COURSE_MAP="$BASE_DIR/courses.json"
 REMOTE_COURSE_MAP="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/courses/courses.json"
 
-# For self-update
+# Self-update
 SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
 
-# Given a course key, get the course URL from COURSE_MAP
-get_course_url() {
+# Logging
+LOG="$BASE_DIR/metadata.log"
+
+# Log downloaded courses
+log_course() {
   local course="$1"
-  jq -r --arg course "$course" '.[$course] // empty' "$COURSE_MAP"
+  local course_repo="$2"
+  local dirpath="$3"
+  local commit_hash
+
+  # Get the commit hash
+  if [[ -d "$course_dir/.git" ]]; then
+    commit_hash=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
+  else
+    commit_hash="unknown"
+  fi
+
+  {
+    echo "course: $course"
+    echo "course_repo: $course_repo"
+    echo "commit_hash: $commit_hash"
+    echo "dirpath: $dirpath"
+    echo "---"
+  } >>"$LOG"
 }
 
-# Given a course name and a course repo url, download the repo
-clone_or_update_repo() {
-  local course=$1
-  local repo_url=$2
-  local course_dir="$BASE_DIR/$course"
+# Clone and run the setup script for a course
+setup_course() {
+  local course = "$1"
 
-  if [[ -z "$repo_url" ]]; then
-    echo "Error: Unknown course '$course'"
+  # Get the remote course repository URL from courses.json
+  local course_repo=$(jq -r --arg course "$course" '.[$course] // empty' "$COURSE_MAP")
+  if [[ -z "$course_repo" ]]; then
+    echo "Could not find remote course repository for '$course' in courses.json"
     exit 1
   fi
 
-  if [[ -d "$course_dir/.git" ]]; then
-    echo "Updating $course repo..."
-    git -C "$course_dir" pull
-  else
-    echo "Cloning $course repo..."
-    mkdir -p "$BASE_DIR"
-    git clone "$repo_url" "$course_dir"
-  fi
-}
+  # Get a dirpath that doesn't exist yet
+  local dirname="$course"
+  local base="$BASE_DIR/$course"
+  local dirpath="$base"
+  local i=1
+  while [[ -e "$dirpath" ]]; do
+    dirpath="${base}-$i"
+    ((i++))
+  done
 
-# Given a course name, run the setup script
-run_setup_script() {
-  local course=$1
-  local course_dir="$BASE_DIR/$course"
-  local script="$course_dir/setup.sh"
+  # Clone the repository
+  echo "Cloning $course repo to $dirpath"
+  mkdir -p "$BASE_DIR"
+  git clone "$course_repo" "$dirpath"
 
+  # Log the course
+  log_course "$course" "$course_repo" "$dirpath"
+
+  # Run the setup script
+  local script="$dirpath/setup.sh"
   if [[ ! -f "$script" ]]; then
-    echo "Error: No setup.sh found in $course_dir"
+    echo "Error: No setup.sh found in $dirpath"
     exit 1
   fi
 
@@ -78,15 +102,20 @@ update_self() {
   rm -f "$TMPFILE"
 }
 
+# List downloaded courses
+list() {
+  cat "$LOG"
+}
+
 # Usage
 usage() {
   echo "Usage $0:"
   echo "Commands:"
   echo " setup <course>   Clone and run course setup"
   echo " update           Update cscourse to the latest version"
+  echo " list             List downloaded courses"
   echo ""
 
-  update_course_map
   echo "Available courses:"
   jq -r 'keys_unsorted[]' "$COURSE_MAP" | sort | sed 's/^/  - /'
   exit 1
@@ -95,25 +124,19 @@ usage() {
 main() {
   # cscourse update
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
+    update_course_map
     update_self
     exit 0
   fi
 
-  # cscourse setup <course>
-  if [[ "$#" -ne 2 || "$1" != "setup" ]]; then
-    usage
+  # cscourse setup <course> [-o <dirname>]
+  if [[ "$#" -eq 2 && "$1" == "setup" ]]; then
+    setup_course "$2"
+    exit 0
   fi
 
-  local course="$2"
-  local repo_url=$(get_course_url "$course")
-
-  if [[ -z "$repo_url" ]]; then
-    echo "Unknown course: $course"
-    usage
-  fi
-
-  clone_or_update_repo "$course" "$repo_url"
-  run_setup_script "$course"
+  echo "Error: Invalid command"
+  usage
 }
 
 main "$@"
