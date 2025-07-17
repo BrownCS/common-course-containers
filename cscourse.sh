@@ -119,7 +119,7 @@ usage() {
   echo "Usage $0:"
   echo "Commands:"
   echo " setup <course>   Clone and run course setup"
-  echo " update           Update cscourse to the latest version"
+  echo " update           Update self to the latest version"
   echo " list             List downloaded courses"
   echo ""
 
@@ -137,13 +137,13 @@ main() {
   fi
 
   # cscourse list
-  if [[ "$#" -eq 1 && "$1" == "list" ]]; then
-    list
+  if [[ "$#" -eq 1 && "$1" == "list" || "$1" == "ls" ]]; then
+    list_courses
     exit 0
   fi
 
-  # cscourse setup <course> [-o <dirname>]
-  if [[ "$#" -eq 2 && "$1" == "setup" ]]; then
+  # cscourse setup <course>
+  if [[ "$#" -eq 2 && "$1" == "setup" || "$1" == "s" ]]; then
     setup_course "$2"
     exit 0
   fi
