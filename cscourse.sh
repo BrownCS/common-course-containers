@@ -14,7 +14,7 @@ SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
 
 # Logging
-LOG="$BASE_DIR/metadata.log"
+LOG="$BASE_DIR/metadata.csv"
 
 get_version() {
   grep -E '^VERSION=' "$1" | cut -d= -f2 | tr -d '"'
@@ -25,22 +25,18 @@ log_course() {
   local course="$1"
   local course_repo="$2"
   local dirpath="$3"
-  local commit_hash
 
   # Get the commit hash
+  local commit="unknown"
   if [[ -d "$course_dir/.git" ]]; then
-    commit_hash=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
-  else
-    commit_hash="unknown"
+    commit=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
   fi
 
-  {
-    echo "course: $course"
-    echo "course_repo: $course_repo"
-    echo "commit_hash: $commit_hash"
-    echo "dirpath: $dirpath"
-    echo "---"
-  } >>"$LOG"
+  # Write header if file doesn't exist
+  if [[ ! -f "$log_file" ]]; then
+    echo "COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
+  fi
+  echo "$course,$repo_url,$commit,$dirpath" >>"$log_file"
 }
 
 # Clone and run the setup script for a course
@@ -109,8 +105,13 @@ update_self() {
 }
 
 # List downloaded courses
-list() {
-  cat "$LOG"
+list_courses() {
+  if [[ ! -f "$LOG" ]]; then
+    echo "No courses installed yet."
+    exit 0
+  fi
+
+  column -s, -t <"$log"
 }
 
 # Usage
