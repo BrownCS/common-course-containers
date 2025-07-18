@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-VERSION="1.0.2"
+VERSION="1.0.3"
 BASE_DIR="/home/courses"
 
 # Setup
@@ -17,6 +17,7 @@ METADATA_DIR="$BASE_DIR/.cscourse"
 LOG="$METADATA_DIR/metadata.csv"
 ID_FILE="$METADATA_DIR/id.txt"
 
+# Check that metadata is in place
 init() {
   # BASE_DIR
   if [[ ! -d "$BASE_DIR" ]]; then
@@ -33,6 +34,7 @@ init() {
     echo '{}' >"$COURSE_MAP"
   fi
 
+  # Metadata
   mkdir -p "$METADATA_DIR"
 
   if [[ ! -f "$LOG" ]]; then
@@ -44,23 +46,7 @@ init() {
   fi
 }
 
-# Log downloaded courses
-log_course() {
-  local id="$1"
-  local course="$2"
-  local course_repo="$3"
-  local dirpath="$4"
-
-  # Get the commit hash
-  local commit="unknown"
-  if [[ -d "$dirpath/.git" ]]; then
-    commit=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
-  fi
-
-  echo "$id,$course,$course_repo,$commit,$dirpath" >>"$LOG"
-}
-
-# Clone and run the setup script for a course
+# Setup a course
 setup_course() {
   local course="$1"
 
@@ -92,6 +78,12 @@ setup_course() {
 
   # Log the course
   log_course "$id" "$course" "$course_repo" "$dirpath"
+  run_course_setup "$dirpath"
+}
+
+# Run the setup script for a course
+run_course_setup() {
+  local dirpath="$1"
 
   # Run the setup script
   local script="$dirpath/setup.sh"
@@ -103,6 +95,48 @@ setup_course() {
   echo "Running setup for $course..."
   chmod +x "$script"
   sandbox "$id" "$script"
+}
+
+# Log downloaded courses
+log_course() {
+  local id="$1"
+  local course="$2"
+  local course_repo="$3"
+  local dirpath="$4"
+
+  # Get the commit hash
+  local commit="unknown"
+  if [[ -d "$dirpath/.git" ]]; then
+    commit=$(git -C "$dirpath" rev-parse HEAD 2>/dev/null)
+  fi
+
+  echo "$id,$course,$course_repo,$commit,$dirpath" >>"$LOG"
+}
+
+# Upgrade course
+upgrade_course() {
+  local id="$1"
+  local line=$(tac "$LOG" | grep -m 1 "^$id,")
+  if [[ -z "$line" ]]; then
+    echo "Error: No course found with ID $id"
+    return 1
+  fi
+
+  local dirpath=$(echo "$line" | cut -d',' -f5)
+  if [[ ! -d "$dirpath" ]]; then
+    echo "Error: $dirpath does not exist"
+    return 1
+  fi
+  if [[ ! -d "$dirpath/.git" ]]; then
+    echo "Error: $dirpath is not a git repo"
+    return 1
+  fi
+
+  echo "Updating course in $dirpath..."
+  git -C "$dirpath" pull
+
+  # Run the bash script again
+  run_course_setup "$dirpath"
 }
 
 # Download update courses.json from the remote repo
@@ -143,9 +177,10 @@ list_courses() {
 usage() {
   echo "Usage $0:"
   echo "Commands:"
-  echo " setup <course>   Clone and run course setup"
-  echo " update           Update self to the latest version"
-  echo " list             List downloaded courses"
+  echo " setup <course>     Clone and run course setup"
+  echo " upgrade <id>       Upgrade course to the latest version"
+  echo " list               List downloaded courses"
+  echo " update             Update self to the latest version"
   echo ""
 
   echo "Available courses:"
@@ -175,6 +210,12 @@ main() {
     exit 0
   fi
 
+  # cscourse upgrade <course>
+  if [[ "$#" -eq 2 && "$1" == "upgrade" ]]; then
+    upgrade_course "$2"
+    exit 0
+  fi
+
   if [[ "$#" -ge 1 ]]; then
     echo "Error: Invalid command: $*"
   fi
@@ -183,4 +224,3 @@ main() {
 }
 
 main "$@"
-
