@@ -38,17 +38,24 @@ mkdir -p "$BIN_DIR"
 # apt-get shim
 cat >"$BIN_DIR/apt-get" <<'EOF'
 #!/bin/bash
-echo "I am here!"
+
 LOG_FILE="${CSC_INTERCEPT_LOG:-.cscourse/default.txt}"
+TMP=$(mktemp)
+
 if [[ "$1" == "install" ]]; then
   for arg in "${@:2}"; do
     if [[ "$arg" != -* ]]; then
-      echo "$arg" >> "$LOG_FILE"
+      echo "$arg" >> "$TMP"
     fi
   done
+  # Overwrite the log file after collecting
+  sort -u "$TMP" > "$LOG_FILE"
+  rm -f "$TMP"
 fi
+
 exec /usr/bin/apt-get "$@"
 EOF
+
 chmod +x "$BIN_DIR/apt-get"
 
 # Run the setup script in the sandboxed environment
@@ -59,4 +66,3 @@ bash "$@"
 echo "Sandbox run complete."
 echo "Packages listed (apt):"
 sort -u "$LOG_FILE"
-
