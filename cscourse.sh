@@ -121,14 +121,7 @@ run_course_setup() {
 
   echo "Running setup for $course..."
   chmod +x "$script"
-
-  # TODO: decide whether to sandbox
-  if command -v sandbox >/dev/null 2>&1; then
-    sandbox "$id" "$script"
-  else
-    echo "Warning: 'sandbox' not found, running directly..."
-    bash "$script"
-  fi
+  bash "$script"
 }
 
 # Upgrade course
