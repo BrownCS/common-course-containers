@@ -1,5 +1,24 @@
 #!/usr/bin/env bash
 
+# Local course metadata is located in
+# /home/courses/<course>/.cscourse/metadata.csv
+# They used to id a course directory even if the
+# folder is renamed. Since it is in a mounted dir,
+# this data persists even if the container is deleted.
+# TODO: need global gitignore for .cscourse
+
+# Global course metadata is located in
+# /var/lib/.cscourse/metadata.csv
+# It is used to list all downloaded courses
+# and provide assistance for updating them.
+# This data does not persist if the container is deleted
+# so it can be used to redownload course packages if a
+# new container is made.
+
+# Sources of truth:
+# local course metadata tells you the id
+# global course metadata tells you the last time setup has been performed
+
 VERSION="1.0.4"
 BASE_DIR="/home/courses"
 
@@ -8,7 +27,9 @@ SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
 
 # Global logging
-LOG="$BASE_DIR/.cscourse/metadata.csv"
+LIB="/var/lib/cscourse"
+LOG="/var/lib/cscourse/metadata.csv"
+SETUP="/var/lib/cscourse/setup.csv"
 
 declare -A COURSE_REPOS
 COURSE_REPOS=(
@@ -31,17 +52,84 @@ init() {
   fi
 
   # Metadata
-  mkdir -p "$(dirname "$METADATA_DIR")"
+  mkdir -p "$(dirname "$LOG")"
   if [[ ! -f "$LOG" ]]; then
     echo "ID,COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
   fi
+
+  # A log of every time some version of the setup.sh script
+  # was run in the container
+  mkdir -p "$(dirname "$SETUP")"
+  if [[ ! -f "$SETUP" ]]; then
+    echo "TIMESTAMP,PATH,HASH" >"$SETUP"
+  fi
+  check_for_setup
 
   # Index
   build_course_index
 }
 
-# Setup a new course
-setup_course() {
+confirm() {
+  while true; do
+    read -p "$1 (y/n): " answer
+    case "$answer" in
+    [yY]) return 0 ;;
+    [nN]) return 1 ;;
+    *) echo "Please answer y or n." ;;
+    esac
+  done
+}
+
+check_for_setup() {
+  # Dirs and hashes where the course has not been setup
+  local dirs=()
+  local hashes=()
+
+  for dirpath in "$BASE_DIR"/*; do
+    [[ -d "$dirpath" ]] || continue
+
+    local setup="$dirpath/setup.sh"
+    if [[ -f $setup ]]; then
+      local hash=$( (
+        echo "$dirpath"
+        cat "$setup"
+      ) | sha256sum | cut -d' ' -f1)
+
+      echo "$hash"
+      if grep -q "$hash" "$SETUP"; then
+        continue
+      fi
+
+      dirs+="$dirpath"
+      hashes+="$hash"
+    fi
+
+    local formatted="[$(printf '"%s", ' "${dirs[@]}")]"
+
+    while true; do
+      read -p "Found setup.sh in $formatted. Do you want to download all (a), download individually (s), or download none (n)?" answer
+      case "$answer" in
+      [aA])
+        for ((i = 0; i < ${#dirpaths[@]}; i++)); do
+          run_course_setup "$dirpath"
+          echo "$(date +%Y-%m-%dT%H:%M:%S),$dirpath,$hash" >>"$SETUP"
+        done
+
+        ;;
+      [sS]) return 1 ;;
+      [nN]) return 1 ;;
+      *) echo "Please answer y or n." ;;
+      esac
+    done
+
+    confirm "Found setup.sh in $formatted. Do you want to download all, " || continue
+
+    confirm "Found setup.sh in $dirpath. Do you want to run it?" || continue
+
+  done
+}
+
+handle_setup() {
   local course="$1"
 
   # Get the remote course repository URL from courses.json
@@ -64,13 +152,37 @@ setup_course() {
   # Clone the repository
   echo "Cloning $course repo to $dirpath"
   git clone "$course_repo" "$dirpath"
+  local id=$(log_new_course "$course" "$course_repo" "$dirpath")
+  setup_course "$id" "$course" "$course_repo" "$dirpath"
+}
 
-  log_course "$course" "$course_repo" "$dirpath"
+# Setup a new course
+setup_course() {
+  local id="$1"
+  local course="$2"
+  local course_repo="$3"
+  local dirpath="$4"
+  local commit=$(get_commit "$dirpath")
+
   run_course_setup "$dirpath"
+
+  # Check whether it is in the global log
+  # If not, add or update it
+  local line=$(tac $LOG | grep -m 1 "^$id,")
+
+  if [[ -z "$line" ]]; then
+    echo "$id,$course,$course_repo,$commit,$dirpath" >>"$LOG"
+    return 0
+  fi
+
+  local new_entry="$id,$course,$course_repo,$commit,$dirpath"
+  if [[ "$line" != "$new_entry" ]]; then
+    sed -i "s|^$id,.*|$new_entry|" "$LOG"
+  fi
 }
 
 # Logging utilities
-get_id() {
+gen_id() {
   local course="$1"
   local course_repo="$2"
   local hash_input="$course-$course_repo-$(date +%s)"
@@ -92,11 +204,11 @@ get_last_entry() {
 }
 
 # Log course metadata in local course directory
-log_course() {
+log_new_course() {
   local course="$1"
   local course_repo="$2"
   local dirpath="$3"
-  local id=$(get_id $course $course_repo)
+  local id=$(gen_id $course $course_repo)
   local commit=$(get_commit "$dirpath")
 
   local log="$dirpath/.cscourse/metadata.csv"
@@ -106,6 +218,7 @@ log_course() {
   fi
 
   echo "$id,$course,$course_repo,$commit,$dirpath" >>"$log"
+  $id
 }
 
 # Run the setup script for a course
@@ -134,7 +247,6 @@ upgrade_course() {
     return 1
   fi
 
-  local line=$(tac "$LOG" | grep -m 1 "^$id,")
   IFS=',' read -r line_id line_course line_course_repo line_commit line_dirpath <<<"$line"
 
   if [[ ! -d "$dirpath" ]]; then
@@ -150,7 +262,7 @@ upgrade_course() {
   git -C "$dirpath" pull
 
   # Run the bash script again
-  run_course_setup "$dirpath"
+  setup_course "$id" "$line_course" "$line_course_repo" "$line_dirpath"
 }
 
 # Update cscourse.sh with the latest version from remote repository
@@ -203,10 +315,10 @@ build_course_index() {
     # If a directory does not have a metadata file with an entry
     # then try to create one and run the setup script
     if [[ ! -f $log ]]; then
-      log_course "$course" "$course_repo" "$dirpath"
-      run_course_setup "$dirpath"
+      local id="$(log_new_course "$course" "$course_repo" "$dirpath")"
+      setupcourse "$id" "$course" "$course_repo" "$dirpath"
     else
-      # If the metadata file exists, make sure that the entry is up to date
+      # If the local metadata file exists, make sure that the entry is up to date
       local last_entry="$(get_last_entry "$log")"
       IFS=',' read -r line_id line_course line_course_repo line_commit line_dirpath <<<"$last_entry"
       local new_entry="$line_id,$course,$course_repo,$(get_commit "$dirpath"),$dirpath"
