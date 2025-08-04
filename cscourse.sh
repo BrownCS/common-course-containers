@@ -1,44 +1,18 @@
 #!/usr/bin/env bash
 
-# Local course metadata is located in
-# /home/courses/<course>/.cscourse/metadata.csv
-# They used to id a course directory even if the
-# folder is renamed. Since it is in a mounted dir,
-# this data persists even if the container is deleted.
-# TODO: need global gitignore for .cscourse
-
-# Global course metadata is located in
-# /var/lib/.cscourse/metadata.csv
-# It is used to list all downloaded courses
-# and provide assistance for updating them.
-# This data does not persist if the container is deleted
-# so it can be used to redownload course packages if a
-# new container is made.
-
-# Sources of truth:
-# local course metadata tells you the id
-# global course metadata tells you the last time setup has been performed
-
-VERSION="1.0.4"
+VERSION="1.0.5"
 BASE_DIR="/home/courses"
 
 # Self-update
 SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
 
-# Global logging
-LIB="/var/lib/cscourse"
-LOG="/var/lib/cscourse/metadata.csv"
-SETUP="/var/lib/cscourse/setup.csv"
-
-declare -A COURSE_REPOS
-COURSE_REPOS=(
+declare -A COURSE_URLS
+COURSE_URLS=(
   [300]="https://github.com/csci0300/cs300-s24-devenv.git"
   [example]="https://github.com/qiaochloe/example-course-repo.git"
 )
 
-# Check that the base directory exists and is a mount
-# Check that .cscourse/metadata.csv exists
 init() {
   # Base directory
   if [[ ! -d "$BASE_DIR" ]]; then
@@ -46,98 +20,19 @@ init() {
     exit 1
   fi
 
+  # TODO: need to check that this works on desktop
   if ! mountpoint -q "$BASE_DIR"; then
     echo "$BASE_DIR is not a mountpoint. Did you mount the directory?"
     exit 1
   fi
 
-  # Metadata
-  mkdir -p "$(dirname "$LOG")"
-  if [[ ! -f "$LOG" ]]; then
-    echo "ID,COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$LOG"
-  fi
-
-  # A log of every time some version of the setup.sh script
-  # was run in the container
-  mkdir -p "$(dirname "$SETUP")"
-  if [[ ! -f "$SETUP" ]]; then
-    echo "TIMESTAMP,PATH,HASH" >"$SETUP"
-  fi
-  check_for_setup
-
-  # Index
-  build_course_index
+  # TODO: update_self
+  # update_self
 }
 
-confirm() {
-  while true; do
-    read -p "$1 (y/n): " answer
-    case "$answer" in
-    [yY]) return 0 ;;
-    [nN]) return 1 ;;
-    *) echo "Please answer y or n." ;;
-    esac
-  done
-}
-
-check_for_setup() {
-  # Dirs and hashes where the course has not been setup
-  local dirs=()
-  local hashes=()
-
-  for dirpath in "$BASE_DIR"/*; do
-    [[ -d "$dirpath" ]] || continue
-
-    local setup="$dirpath/setup.sh"
-    if [[ -f $setup ]]; then
-      local hash=$( (
-        echo "$dirpath"
-        cat "$setup"
-      ) | sha256sum | cut -d' ' -f1)
-
-      echo "$hash"
-      if grep -q "$hash" "$SETUP"; then
-        continue
-      fi
-
-      dirs+="$dirpath"
-      hashes+="$hash"
-    fi
-
-    local formatted="[$(printf '"%s", ' "${dirs[@]}")]"
-
-    while true; do
-      read -p "Found setup.sh in $formatted. Do you want to download all (a), download individually (s), or download none (n)?" answer
-      case "$answer" in
-      [aA])
-        for ((i = 0; i < ${#dirpaths[@]}; i++)); do
-          run_course_setup "$dirpath"
-          echo "$(date +%Y-%m-%dT%H:%M:%S),$dirpath,$hash" >>"$SETUP"
-        done
-
-        ;;
-      [sS]) return 1 ;;
-      [nN]) return 1 ;;
-      *) echo "Please answer y or n." ;;
-      esac
-    done
-
-    confirm "Found setup.sh in $formatted. Do you want to download all, " || continue
-
-    confirm "Found setup.sh in $dirpath. Do you want to run it?" || continue
-
-  done
-}
-
-handle_setup() {
+setup_course() {
   local course="$1"
-
-  # Get the remote course repository URL from courses.json
-  local course_repo="${COURSE_REPOS[$course]}"
-  if [[ -z "$course_repo" ]]; then
-    echo "Could not find remote course repository for '$course'"
-    exit 1
-  fi
+  local course_url="${COURSE_URLS["$course"]}"
 
   # Get a new name for dirpath
   local dirname="$course"
@@ -148,132 +43,102 @@ handle_setup() {
     dirpath="${base}-$i"
     ((i++))
   done
+  local script="$dirpath/setup.sh"
+
+  # Find the course_url
+  if [[ -z "$course_url" ]]; then
+    echo_error "ERROR: Could not find remote course repository for '$course'"
+    echo "(1) To install a course repository manually, run: "
+    echo "       git clone <course-url>"
+    echo "       chmod +x $script"
+    echo "       bash $script"
+    echo "(2) To add a new course to cscourse, email problem@cs.brown.edu"
+    echo "    with the <course> and the <course-url>"
+    echo "(3) To modify the course index locally during development,"
+    echo "    edit the COURSE_URLS array in /usr/local/bin/cscourse"
+    exit 1
+  fi
 
   # Clone the repository
-  echo "Cloning $course repo to $dirpath"
-  git clone "$course_repo" "$dirpath"
-  local id=$(log_new_course "$course" "$course_repo" "$dirpath")
-  setup_course "$id" "$course" "$course_repo" "$dirpath"
-}
-
-# Setup a new course
-setup_course() {
-  local id="$1"
-  local course="$2"
-  local course_repo="$3"
-  local dirpath="$4"
-  local commit=$(get_commit "$dirpath")
-
-  run_course_setup "$dirpath"
-
-  # Check whether it is in the global log
-  # If not, add or update it
-  local line=$(tac $LOG | grep -m 1 "^$id,")
-
-  if [[ -z "$line" ]]; then
-    echo "$id,$course,$course_repo,$commit,$dirpath" >>"$LOG"
-    return 0
-  fi
-
-  local new_entry="$id,$course,$course_repo,$commit,$dirpath"
-  if [[ "$line" != "$new_entry" ]]; then
-    sed -i "s|^$id,.*|$new_entry|" "$LOG"
-  fi
-}
-
-# Logging utilities
-gen_id() {
-  local course="$1"
-  local course_repo="$2"
-  local hash_input="$course-$course_repo-$(date +%s)"
-  echo -n "$hash_input" | sha256sum | cut -c1-8
-}
-
-get_commit() {
-  local dirpath="$1"
-  if [[ -d "$dirpath/.git" ]]; then
-    git -C "$dirpath" rev-parse HEAD 2>/dev/null
-  else
-    echo "unknown"
-  fi
-}
-
-get_last_entry() {
-  local log="$1"
-  tail -n +2 "$log" | tail -n 1
-}
-
-# Log course metadata in local course directory
-log_new_course() {
-  local course="$1"
-  local course_repo="$2"
-  local dirpath="$3"
-  local id=$(gen_id $course $course_repo)
-  local commit=$(get_commit "$dirpath")
-
-  local log="$dirpath/.cscourse/metadata.csv"
-  if [[ ! -f "$log" ]]; then
-    mkdir -p $(dirname "$log")
-    echo "ID,COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$log"
-  fi
-
-  echo "$id,$course,$course_repo,$commit,$dirpath" >>"$log"
-  $id
-}
-
-# Run the setup script for a course
-run_course_setup() {
-  local dirpath="$1"
+  echo_command "git clone $course $dirpath"
+  git clone "$course_url" "$dirpath"
 
   # Run the setup script
-  local script="$dirpath/setup.sh"
   if [[ ! -f "$script" ]]; then
-    echo "Error: No setup.sh found in $dirpath"
+    echo_error "ERROR: No setup.sh found in $dirpath"
+    echo "       Check with course staff if there should be a setup script for the course"
     return 0
   fi
 
-  echo "Running setup for $course..."
+  echo_command "chmod +x $script"
+  echo_command "bash $script"
   chmod +x "$script"
   bash "$script"
 }
 
-# Upgrade course
-upgrade_course() {
-  local id="$1"
-  local line=$(tac "$LOG" | grep -m 1 "^$id,")
+list_courses() {
+  local tmp=$(mktemp)
+  echo "BASENAME,COURSE,COURSE_REPO,COMMIT" >"$tmp"
 
-  if [[ -z "$line" ]]; then
-    echo "Error: No course found with ID $id"
-    return 1
-  fi
+  for dirpath in "$BASE_DIR"/*; do
+    # Check that dirpath is a directory
+    [[ -d "$dirpath" ]] || continue
 
-  IFS=',' read -r line_id line_course line_course_repo line_commit line_dirpath <<<"$line"
+    # Get the course_url
+    local course_url
+    course_url="$(get_git_url "$dirpath")"
+    if [[ "$?" -ne 0 ]]; then continue; fi
 
-  if [[ ! -d "$dirpath" ]]; then
-    echo "Error: $dirpath does not exist"
-    return 1
-  fi
-  if [[ ! -d "$dirpath/.git" ]]; then
-    echo "Error: $dirpath is not a git repo"
-    return 1
-  fi
+    # Find the course
+    local course
+    course="$(find_course "$course_url")"
+    if [[ "$?" -ne 0 ]]; then continue; fi
 
-  echo "Updating course in $dirpath..."
-  git -C "$dirpath" pull
+    # Get the commit
+    local commit
+    commit="$(get_git_commit "$dirpath")"
+    if [[ "$?" -ne 0 ]]; then continue; fi
 
-  # Run the bash script again
-  setup_course "$id" "$line_course" "$line_course_repo" "$line_dirpath"
+    local basename="$(basename "$dirpath")"
+
+    echo "$basename,$course,$course_url,$commit" >>"$tmp"
+  done
+
+  column -s, -t <"$tmp"
 }
 
-# Update cscourse.sh with the latest version from remote repository
+upgrade_course() {
+  local basename="$1"
+  local dirpath="$BASE_DIR/$basename"
+
+  if [[ ! -d "$dirpath" ]]; then
+    echo_error "ERROR: '$dirpath' does not exist"
+    echo "       Is '$basename' the right directory name?"
+    return 1
+  fi
+
+  if [[ ! -d "$dirpath/.git" ]]; then
+    echo_error "ERROR: $dirpath is not a git repo"
+    return 1
+  fi
+
+  echo_command "cd $dirpath"
+  cd "$dirpath"
+
+  echo_command "git pull"
+  git pull
+
+  # TODO: handle merge conflicts in some way?
+}
+
 update_self() {
-  echo "Checking for latest version of cscourse..."
-  TMPFILE=$(mktemp)
-  if curl -sSfL "$REMOTE_SELF" -o "$TMPFILE"; then
-    if ! cmp -s "$SELF" "$TMPFILE"; then
-      chmod +x "$TMPFILE"
-      cp "$TMPFILE" "$SELF"
-      local new_version=$(grep -E '^VERSION=' "$TMPFILE" | cut -d= -f2 | tr -d '"')
+  echo "Updating to latest version of cscourse..."
+  tmp=$(mktemp)
+  if curl -sSfL "$REMOTE_SELF" -o "$tmp"; then
+    if ! cmp -s "$SELF" "$tmp"; then
+      chmod +x "$tmp"
+      cp "$tmp" "$SELF"
+      local new_version=$(grep -E '^VERSION=' "$tmp" | cut -d= -f2 | tr -d '"')
       echo "Updated to latest version $new_version"
     else
       echo "Already up to date"
@@ -281,90 +146,80 @@ update_self() {
   else
     echo "Failed to check for update"
   fi
-  rm -f "$TMPFILE"
+  rm -f "$tmp"
 }
 
-# List downloaded courses
-list_courses() {
-  column -s, -t <"$LOG"
+# Course utilites
+
+get_git_url() {
+  local dirpath="$1"
+  local url=$(git -C "$dirpath" remote get-url origin 2>/dev/null)
+  if [[ "$?" -ne 0 ]]; then return 1; fi
+
+  if [[ "$url" =~ ^git@([^:]+):(.+)$ ]]; then
+    echo "https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+  else
+    echo "$url"
+  fi
 }
 
-# Build course index in the root of the course directory
-# which combines metadata from <course>/.cscourse/metadata.csv
-build_course_index() {
-  local tmp=$(mktemp)
-  echo "ID,COURSE,COURSE_REPO,COMMIT,DIRPATH" >"$tmp"
+get_git_commit() {
+  local dirpath="$1"
+  git -C "$dirpath" rev-parse HEAD 2>/dev/null
+}
 
-  for dirpath in "$BASE_DIR"/*; do
-    [[ -d "$dirpath" ]] || continue
-    local log="$dirpath/.cscourse/metadata.csv"
-
-    # Get the course-repo and course
-    local course_repo=$(git -C "$dirpath" remote get-url origin 2>/dev/null)
-    if [[ "$?" -ne 0 ]]; then continue; fi
-
-    local course=""
-    for c in "${!COURSE_REPOS[@]}"; do
-      if [[ "${COURSE_REPOS[$c]}" == "$course_repo" ]]; then
-        course="$c"
-        break
-      fi
-    done
-    if [[ -z "$course" ]]; then continue; fi
-
-    # If a directory does not have a metadata file with an entry
-    # then try to create one and run the setup script
-    if [[ ! -f $log ]]; then
-      local id="$(log_new_course "$course" "$course_repo" "$dirpath")"
-      setupcourse "$id" "$course" "$course_repo" "$dirpath"
-    else
-      # If the local metadata file exists, make sure that the entry is up to date
-      local last_entry="$(get_last_entry "$log")"
-      IFS=',' read -r line_id line_course line_course_repo line_commit line_dirpath <<<"$last_entry"
-      local new_entry="$line_id,$course,$course_repo,$(get_commit "$dirpath"),$dirpath"
-
-      if [[ ! "$new_entry" == "$last_entry" ]]; then
-        echo "$new_entry" >>"$log"
-      fi
+find_course() {
+  local course_url="$1"
+  for course in "${!COURSE_URLS[@]}"; do
+    if [[ "${COURSE_URLS["$course"]}" == "$course_url" ]]; then
+      echo "$course"
+      return 0
     fi
-
-    # Read the last line of the metadata file and record it in TMP
-    local last_entry="$(get_last_entry "$log")"
-    echo "$last_entry" >>"$tmp"
   done
+  return 1
+}
 
-  mv "$tmp" "$LOG"
+# Printing utilities
+
+RED='\033[31m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+RESET='\033[0m'
+
+echo_command() {
+  local text="$1"
+  echo -e "${GREEN}${text}${RESET}"
+}
+
+echo_error() {
+  local text="$1"
+  echo -e "${RED}${text}${RESET}"
 }
 
 # Usage
 usage() {
   echo "Usage $0:"
   echo "Commands:"
-  echo " setup <course>     Clone and run course setup"
-  echo " upgrade <id>       Upgrade course to the latest version"
-  echo " list               List downloaded courses"
-  echo " update             Update cscourse to the latest version"
+  echo "  setup <course>      Clone and run course setup"
+  echo "  list                List downloaded courses"
+  echo "  upgrade <basename>  Upgrade course to the latest version"
+  echo "  update              Update cscourse to the latest version"
   echo ""
 
   echo "Available courses:"
-  for course in "${!COURSE_REPOS[@]}"; do
-    echo " $course"
+  for course in "${!COURSE_URLS[@]}"; do
+    echo "  $course"
   done
 
+  echo "Example: $0 setup 300"
   exit 0
 }
 
 main() {
   init
 
-  # cscourse update
-  if [[ "$#" -eq 1 && "$1" == "update" ]]; then
-    update_self
-    exit 0
-  fi
-
   # cscourse list
-  if [[ "$#" -eq 1 && "$1" == "list" || "$1" == "ls" ]]; then
+  if [[ "$#" -eq 1 && ("$1" == "list" || "$1" == "ls") ]]; then
     list_courses
     exit 0
   fi
@@ -381,8 +236,14 @@ main() {
     exit 0
   fi
 
+  # cscourse update
+  if [[ "$#" -eq 1 && "$1" == "update" ]]; then
+    update_self
+    exit 0
+  fi
+
   if [[ "$#" -ge 1 ]]; then
-    echo "Error: Invalid command: $*"
+    echo "ERROR: Invalid command: $*"
   fi
 
   usage
