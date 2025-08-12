@@ -2,8 +2,8 @@
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 # Set variables
-IMAGE_NAME="cs-courses"
-CONTAINER_NAME="cs-courses"
+IMAGE_NAME="cs-courses2"
+CONTAINER_NAME="cs-courses2"
 CONTAINER_RUNTIME="podman"
 VOLUME_PATH="$SCRIPT_DIR/courses"
 NETWORK_NAME=net-cs-courses
@@ -134,14 +134,45 @@ start_new_container() {
   # Create network if it doesn't exist
   create_network
 
+  # Edit etc/passwd and etc/group to set up the user
+  local tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  local cid="$("$CONTAINER_RUNTIME" create "$IMAGE_NAME")"
+  "$CONTAINER_RUNTIME" cp "$cid:/etc/passwd" "/$tmp/passwd"
+  "$CONTAINER_RUNTIME" cp "$cid:/etc/group" "/$tmp/group"
+  "$CONTAINER_RUNTIME" rm "$cid"
+  local user="$(id -un)"
+  local group="$(id -gn)"
+  local uid="$(id -u)"
+  local gid="$(id -g)"
+
+  # Drop lines with same UID, username, or GID
+  awk -F: -v uid="$uid" -v user="$user" '
+  !($3 == uid || $1 == user)
+' "$tmp/passwd" >"$tmp/passwd.new" && mv "$tmp/passwd.new" "$tmp/passwd"
+  awk -F: -v gid="$gid" -v group="$group" '
+  # drop lines with same GID or same group name
+  !($3 == gid || $1 == group)
+' "$tmp/group" >"$tmp/group.new" && mv "$tmp/group.new" "$tmp/group"
+
+  # Ensure trailing newline before appending
+  tail -c1 "$tmp/passwd" 2>/dev/null | read _ || echo >>"$tmp/passwd"
+  echo "$user:x:$uid:$gid:Default User:/home/courses:/bin/bash" >>"/$tmp/passwd"
+  tail -c1 "$tmp/group" 2>/dev/null | read _ || echo >>"$tmp/group"
+  echo "$group:x:$gid:$user" >>"$tmp/group"
+
   # Create the container
   echo "Creating and starting container '$CONTAINER_NAME'..."
-  echo_and_run "$CONTAINER_RUNTIME" run -it \
+  echo_and_run "$CONTAINER_RUNTIME" run \
+    --interactive \
+    --tty \
     --name "$CONTAINER_NAME" \
     --platform "$PLATFORM" \
     --network "${NETWORK_NAME}" \
     --privileged \
-    --userns=keep-id \
+    --user "$uid:$gid" \
+    --volume "$tmp/group:/etc/group:ro" \
+    --volume "$tmp/passwd:/etc/passwd:ro" \
     --entrypoint /bin/bash \
     --security-opt seccomp=unconfined \
     --cap-add=SYS_PTRACE \
