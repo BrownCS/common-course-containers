@@ -60,8 +60,7 @@ setup_course() {
   fi
 
   # Clone the repository
-  echo_command "git clone $course $dirpath"
-  git clone "$course_url" "$dirpath"
+  echo_and_run git clone "$course_url" "$dirpath"
 
   # Run the setup script
   if [[ ! -f "$script" ]]; then
@@ -70,10 +69,8 @@ setup_course() {
     return 0
   fi
 
-  echo_command "chmod +x $script"
-  echo_command "bash $script"
-  chmod +x "$script"
-  bash "$script"
+  echo_and_run chmod +x $script
+  echo_and_run bash $script
 }
 
 list_courses() {
@@ -122,11 +119,8 @@ upgrade_course() {
     return 1
   fi
 
-  echo_command "cd $dirpath"
-  cd "$dirpath"
-
-  echo_command "git pull"
-  git pull
+  echo_and_run cd "$dirpath"
+  echo_and_run git pull
 
   # TODO: handle merge conflicts in some way?
 }
@@ -184,11 +178,12 @@ find_course() {
 RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
+BLUE='\033[0;34m'
 RESET='\033[0m'
 
-echo_command() {
-  local text="$1"
-  echo -e "${GREEN}${text}${RESET}"
+echo_and_run() {
+  echo -e "${BLUE}$*${RESET}"
+  "$@"
 }
 
 echo_error() {
