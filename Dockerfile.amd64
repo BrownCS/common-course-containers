@@ -1,5 +1,4 @@
 # Define a base for the image
-# noble is the latest LTS release
 # jammy is the current release supported by GradeScope
 FROM ubuntu:jammy
 
@@ -17,21 +16,27 @@ RUN apt-get update && \
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-# Copy courses-cli
-COPY cscourse.sh /usr/local/bin/cscourse
-
 # Install packages
 RUN apt-get install -y \
+  bsdmainutils \
   sudo \
   git \
+  nano \
   vim \
   neovim \
-  nano \
   wget \
   curl \
   xxd \
   jq
 
-USER root
+# Allow any user to sudo
+RUN echo "ALL ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Copy cscourse and apt-sandbox
+COPY cscourse.sh /usr/local/bin/cscourse
+COPY apt-sandbox.sh /usr/local/bin/apt-sandbox
+RUN chmod +x /usr/local/bin/cscourse /usr/local/bin/apt-sandbox
+RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt
+RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt-get
 
 CMD [ "bash" ]
