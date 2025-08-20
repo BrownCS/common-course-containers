@@ -18,6 +18,12 @@ esac
 
 args=("$@")
 
+# Always run update with sudo
+if [[ " ${args[*]} " =~ " update " ]]; then
+  echo "[apt-sandbox] running update with sudo"
+  exec sudo "$REAL_COMMAND" "$@"
+fi
+
 # Find the first occurence of "install"
 install_idx=-1
 for i in "${!args[@]}"; do
