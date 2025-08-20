@@ -2,8 +2,8 @@
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 # Set variables
-IMAGE_NAME="cs-courses2"
-CONTAINER_NAME="cs-courses2"
+IMAGE_NAME="cs-courses"
+CONTAINER_NAME="cs-courses"
 CONTAINER_RUNTIME="podman"
 VOLUME_PATH="$SCRIPT_DIR/courses"
 NETWORK_NAME=net-cs-courses
@@ -134,39 +134,11 @@ start_new_container() {
   # Create network if it doesn't exist
   create_network
 
-  # Edit etc/passwd, etc/group, and etc/shadow to set up the user
-  local tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' EXIT
-  local cid="$("$CONTAINER_RUNTIME" create "$IMAGE_NAME")"
-  "$CONTAINER_RUNTIME" cp "$cid:/etc/passwd" "/$tmp/passwd"
-  "$CONTAINER_RUNTIME" cp "$cid:/etc/group" "/$tmp/group"
-  "$CONTAINER_RUNTIME" cp "$cid:/etc/shadow" "/$tmp/shadow"
-  "$CONTAINER_RUNTIME" rm "$cid"
+  # Set up user
   local user="$(id -un)"
   local group="$(id -gn)"
   local uid="$(id -u)"
   local gid="$(id -g)"
-
-  # Drop lines with same UID, username, or GID
-  awk -F: -v uid="$uid" -v user="$user" '
-  !($3 == uid || $1 == user)
-' "$tmp/passwd" >"$tmp/passwd.new" && mv "$tmp/passwd.new" "$tmp/passwd"
-
-  awk -F: -v gid="$gid" -v group="$group" '
-  !($3 == gid || $1 == group)
-' "$tmp/group" >"$tmp/group.new" && mv "$tmp/group.new" "$tmp/group"
-
-  awk -F: -v user="$user" '
-  $1 != user' "$tmp/shadow" >"$tmp/shadow.new" && mv "$tmp/shadow.new" "$tmp/shadow"
-
-  # Ensure trailing newline before appending
-  tail -c1 "$tmp/passwd" 2>/dev/null | read _ || echo >>"$tmp/passwd"
-  echo "$user:x:$uid:$gid:Default User:/home/courses:/bin/bash" >>"/$tmp/passwd"
-  tail -c1 "$tmp/group" 2>/dev/null | read _ || echo >>"$tmp/group"
-  echo "$group:x:$gid:$user" >>"$tmp/group"
-  local lastchg="$(($(date +%s) / 86400))"
-  tail -c1 "$tmp/shadow" 2>/dev/null | read _ || echo >>"$tmp/shadow"
-  echo "$user::${lastchg}:0:99999:7:::" >>"$tmp/shadow"
 
   # Create the container
   echo "Creating and starting container '$CONTAINER_NAME'..."
@@ -177,10 +149,10 @@ start_new_container() {
     --platform "$PLATFORM" \
     --network "${NETWORK_NAME}" \
     --privileged \
-    --volume "$tmp/group:/etc/group:ro" \
-    --volume "$tmp/passwd:/etc/passwd:ro" \
-    --volume "$tmp/shadow:/etc/shadow:ro" \
-    --user "$uid:$gid" \
+    --passwd \
+    --group-entry "$group::$gid:$user" \
+    --passwd-entry "$user::$uid:$gid:Default User:/home/courses:/bin/bash" \
+    --userns keep-id:uid=$uid,gid=$gid \
     --entrypoint /bin/bash \
     --security-opt seccomp=unconfined \
     --cap-add=SYS_PTRACE \

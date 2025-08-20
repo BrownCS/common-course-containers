@@ -35,10 +35,10 @@ RUN apt-get install -y \
 # Allow any user to sudo
 RUN echo "ALL ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Copy cscourse and apt-sandbox
-COPY cscourse.sh /usr/local/bin/cscourse
+# Copy ccc and apt-sandbox
+COPY ccc.sh /usr/local/bin/ccc
 COPY apt-sandbox.sh /usr/local/bin/apt-sandbox
-RUN chmod +x /usr/local/bin/cscourse /usr/local/bin/apt-sandbox
+RUN chmod +x /usr/local/bin/ccc /usr/local/bin/apt-sandbox
 RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt
 RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt-get
 

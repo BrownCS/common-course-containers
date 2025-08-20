@@ -5,7 +5,7 @@ BASE_DIR="/home/courses"
 
 # Self-update
 SELF="$(realpath "$0")"
-REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/cscourse.sh"
+REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/ccc.sh"
 
 declare -A COURSE_URLS
 COURSE_URLS=(
@@ -52,10 +52,10 @@ setup_course() {
     echo "       git clone <course-url>"
     echo "       chmod +x $script"
     echo "       bash $script"
-    echo "(2) To add a new course to cscourse, email problem@cs.brown.edu"
+    echo "(2) To add a new course to ccc, email problem@cs.brown.edu"
     echo "    with the <course> and the <course-url>"
     echo "(3) To modify the course index locally during development,"
-    echo "    edit the COURSE_URLS array in /usr/local/bin/cscourse"
+    echo "    edit the COURSE_URLS array in /usr/local/bin/ccc"
     exit 1
   fi
 
@@ -126,7 +126,7 @@ upgrade_course() {
 }
 
 update_self() {
-  echo "Updating to latest version of cscourse..."
+  echo "Updating to latest version of ccc..."
   tmp=$(mktemp)
   if curl -sSfL "$REMOTE_SELF" -o "$tmp"; then
     if ! cmp -s "$SELF" "$tmp"; then
@@ -198,7 +198,7 @@ usage() {
   echo "  setup <course>      Clone and run course setup"
   echo "  list                List downloaded courses"
   echo "  upgrade <basename>  Upgrade course to the latest version"
-  echo "  update              Update cscourse to the latest version"
+  echo "  update              Update ccc to the latest version"
   echo ""
 
   echo "Available courses:"
@@ -213,25 +213,25 @@ usage() {
 main() {
   init
 
-  # cscourse list
+  # ccc list
   if [[ "$#" -eq 1 && ("$1" == "list" || "$1" == "ls") ]]; then
     list_courses
     exit 0
   fi
 
-  # cscourse setup <course>
+  # ccc setup <course>
   if [[ "$#" -eq 2 && "$1" == "setup" || "$1" == "s" ]]; then
     setup_course "$2"
     exit 0
   fi
 
-  # cscourse upgrade <course>
+  # ccc upgrade <course>
   if [[ "$#" -eq 2 && "$1" == "upgrade" ]]; then
     upgrade_course "$2"
     exit 0
   fi
 
-  # cscourse update
+  # ccc update
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
     update_self
     exit 0
