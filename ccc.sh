@@ -71,6 +71,7 @@ setup_course() {
 
   echo_and_run chmod +x $script
   echo_and_run bash $script
+  cd "$dirpath" && direnv allow
 }
 
 list_courses() {
