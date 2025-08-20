@@ -131,8 +131,9 @@ update_self() {
   if curl -sSfL "$REMOTE_SELF" -o "$tmp"; then
     if ! cmp -s "$SELF" "$tmp"; then
       chmod +x "$tmp"
-      cp "$tmp" "$SELF"
-      local new_version=$(grep -E '^VERSION=' "$tmp" | cut -d= -f2 | tr -d '"')
+      sudo cp "$tmp" "$SELF"
+      local new_version
+      new_version=$(grep -E '^VERSION=' "$tmp" | cut -d= -f2 | tr -d '"')
       echo "Updated to latest version $new_version"
     else
       echo "Already up to date"
