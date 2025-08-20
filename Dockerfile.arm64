@@ -43,4 +43,7 @@ RUN chmod +x /usr/local/bin/ccc /usr/local/bin/apt-sandbox
 RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt
 RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt-get
 
+# Hook direnv into the shell
+RUN echo 'eval "$(direnv hook bash)"' >> /etc/skel/.bashrc
+
 CMD [ "bash" ]
