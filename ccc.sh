@@ -9,7 +9,7 @@ REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main
 
 declare -A COURSE_URLS
 COURSE_URLS=(
-  [300]="https://github.com/csci0300/cs300-s24-devenv.git"
+  ["300-demo"]="https://github.com/qiaochloe/300-demo.git"
   [example]="https://github.com/qiaochloe/example-course-repo.git"
 )
 
