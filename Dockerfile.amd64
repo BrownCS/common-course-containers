@@ -1,6 +1,5 @@
 # Define a base for the image
-# jammy is the current release supported by GradeScope
-FROM ubuntu:jammy
+FROM ubuntu:noble
 
 # Avoid interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
