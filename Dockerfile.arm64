@@ -21,6 +21,7 @@ COPY --chown=root:root sources.list /etc/apt/sources.list
 
 # Install packages
 RUN apt-get install -y \
+  direnv \
   bsdmainutils \
   sudo \
   git \

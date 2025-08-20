@@ -18,6 +18,7 @@ ENV LC_ALL=en_US.UTF-8
 
 # Install packages
 RUN apt-get install -y \
+  direnv \
   bsdmainutils \
   sudo \
   git \
