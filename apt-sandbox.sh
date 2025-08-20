@@ -18,9 +18,14 @@ esac
 
 args=("$@")
 
-# Always run update with sudo
+# Always run update or upgrade with sudo
 if [[ " ${args[*]} " =~ " update " ]]; then
   echo "[apt-sandbox] running update with sudo"
+  exec sudo "$REAL_COMMAND" "$@"
+fi
+
+if [[ " ${args[*]} " =~ " upgrade " ]]; then
+  echo "[apt-sandbox] running upgrade with sudo"
   exec sudo "$REAL_COMMAND" "$@"
 fi
 
