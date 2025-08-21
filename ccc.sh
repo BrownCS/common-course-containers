@@ -5,11 +5,12 @@ BASE_DIR="/home/courses"
 
 # Self-update
 SELF="$(realpath "$0")"
-REMOTE_SELF="https://raw.githubusercontent.com/qiaochloe/unified-containers/main/ccc.sh"
+REMOTE_SELF="https://raw.githubusercontent.com/BrownCS/common-course-containers/main/ccc.sh"
 
 declare -A COURSE_URLS
 COURSE_URLS=(
-  ["300-demo"]="https://github.com/qiaochloe/300-demo.git"
+  ["csci-0300-demo"]="https://github.com/qiaochloe/csci-0300-demo.git"
+  ["csci-1680-demo"]="https://github.com/qiaochloe/csci-1680-demo.git"
   [example]="https://github.com/qiaochloe/example-course-repo.git"
 )
 
