@@ -256,26 +256,8 @@ check_container_runtime() {
   fi
 
   echo "Container runtime '$CONTAINER_RUNTIME' not found"
-  echo "Runtimes detected:"
-  echo "  Podman: $(command -v "$CONTAINER_RUNTIME" >/dev/null && echo YES || echo NO)"
-  echo "  Docker: $(command -v docker >/dev/null && echo YES || echo NO)"
-
-  while true; do
-    read -p "Which container runtime? (podman/docker): " runtime
-    if [[ $runtime == "$CONTAINER_RUNTIME" ]]; then
-      CONTAINER_RUNTIME=podman
-      echo "Using podman as container runtime"
-      break
-    elif [[ $runtime = docker ]]; then
-      CONTAINER_RUNTIME=docker
-      echo "Using docker as container runtime"
-      break
-    else
-      echo "Invalid choice. Please enter 'podman' or 'docker'"
-    fi
-  done
-
-  echo ""
+  echo "Please install '$CONTAINER_RUNTIME'"
+  exit 1
 }
 
 # Main script
