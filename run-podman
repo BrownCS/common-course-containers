@@ -181,6 +181,10 @@ start_container() {
 
 # Create, start, or attach to a container
 run_container() {
+  if ! [[ -d courses ]]; then
+    mkdir courses
+  fi
+
   if has_container; then
     start_container
   else
