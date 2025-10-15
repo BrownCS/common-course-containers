@@ -71,7 +71,12 @@ setup_course() {
   fi
 
   echo_and_run chmod +x $script
-  echo_and_run bash $script
+  echo_and_run bash yes | $script
+
+  # Make sure that direnv is allowed
+  if ! grep -q 'direnv hook bash' ~/.bashrc; then
+    echo 'eval "$(direnv hook bash)"' >>~/.bashrc
+  fi
   cd "$dirpath" && direnv allow
 }
 
