@@ -1,39 +1,88 @@
 #!/usr/bin/env bash
 
 VERSION="1.0.5"
-BASE_DIR="/home/courses"
+# Configurable base directory - defaults to ./courses for host, can be overridden
+BASE_DIR="${CCC_COURSES_DIR:-./courses}"
 
 # Self-update
 SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/BrownCS/common-course-containers/main/ccc.sh"
 
-declare -A COURSE_URLS
-COURSE_URLS=(
-  ["csci-0300-demo"]="https://github.com/qiaochloe/csci-0300-demo.git"
-  ["csci-1680-demo"]="https://github.com/qiaochloe/csci-1680-demo.git"
-  [example]="https://github.com/qiaochloe/example-course-repo.git"
-)
+# Registry file location
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
+
+# Registry functions (CSV-based, bash 3.2+ compatible)
+get_course_url() {
+  local course="$1"
+
+  if [[ ! -f "$REGISTRY_FILE" ]]; then
+    echo_error "Registry file not found: $REGISTRY_FILE"
+    return 1
+  fi
+
+  # Parse CSV, skip comments and empty lines
+  while IFS=',' read -r course_id repo_url name semester; do
+    # Skip comments and empty lines
+    [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
+
+    if [[ "$course_id" == "$course" ]]; then
+      echo "$repo_url"
+      return 0
+    fi
+  done < "$REGISTRY_FILE"
+
+  return 1
+}
+
+list_available_courses() {
+  if [[ ! -f "$REGISTRY_FILE" ]]; then
+    echo_error "Registry file not found: $REGISTRY_FILE"
+    return 1
+  fi
+
+  echo "Available courses:"
+  while IFS=',' read -r course_id repo_url name semester; do
+    # Skip comments and empty lines
+    [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
+    echo "  $course_id"
+  done < "$REGISTRY_FILE"
+}
 
 init() {
-  # Base directory
+  # Base directory - create if it doesn't exist
   if [[ ! -d "$BASE_DIR" ]]; then
-    echo "$BASE_DIR does not exist. Did you change the name?"
+    echo_error "Courses directory does not exist: $BASE_DIR"
+    echo "Run 'ccc init' to set up your courses directory"
     exit 1
   fi
 
-  # TODO: need to check that this works on desktop
-  if ! mountpoint -q "$BASE_DIR"; then
-    echo "$BASE_DIR is not a mountpoint. Did you mount the directory?"
+  # Only check for mountpoint if we're likely in a container context
+  if [[ "$BASE_DIR" == "/home/courses" ]] && ! mountpoint -q "$BASE_DIR" 2>/dev/null; then
+    echo_error "$BASE_DIR is not a mountpoint. Are you running inside the container?"
+    echo "If you're on the host, try: ccc run"
     exit 1
   fi
+}
 
-  # TODO: update_self
-  # update_self
+init_courses_dir() {
+  echo "Setting up courses directory at: $BASE_DIR"
+
+  if [[ -d "$BASE_DIR" ]]; then
+    echo "Directory already exists: $BASE_DIR"
+  else
+    mkdir -p "$BASE_DIR"
+    echo "Created courses directory: $BASE_DIR"
+  fi
+
+  echo "Setup complete! You can now run 'ccc setup <course>' to install courses."
+  echo "You can run 'ccc run' to start the container."
 }
 
 setup_course() {
   local course="$1"
-  local course_url="${COURSE_URLS["$course"]}"
+  local course_url
+  course_url="$(get_course_url "$course")"
 
   # Get a new name for dirpath
   local dirname="$course"
@@ -47,7 +96,7 @@ setup_course() {
   local script="$dirpath/setup.sh"
 
   # Find the course_url
-  if [[ -z "$course_url" ]]; then
+  if [[ $? -ne 0 || -z "$course_url" ]]; then
     echo_error "ERROR: Could not find remote course repository for '$course'"
     echo "(1) To install a course repository manually, run: "
     echo "       git clone <course-url>"
@@ -55,8 +104,9 @@ setup_course() {
     echo "       bash $script"
     echo "(2) To add a new course to ccc, email problem@cs.brown.edu"
     echo "    with the <course> and the <course-url>"
-    echo "(3) To modify the course index locally during development,"
-    echo "    edit the COURSE_URLS array in /usr/local/bin/ccc"
+    echo "(3) To modify the course registry locally during development,"
+    echo "    edit the registry file at $REGISTRY_FILE"
+    list_available_courses
     exit 1
   fi
 
@@ -172,12 +222,22 @@ get_git_commit() {
 
 find_course() {
   local course_url="$1"
-  for course in "${!COURSE_URLS[@]}"; do
-    if [[ "${COURSE_URLS["$course"]}" == "$course_url" ]]; then
-      echo "$course"
+
+  if [[ ! -f "$REGISTRY_FILE" ]]; then
+    return 1
+  fi
+
+  # Parse CSV to find course by URL
+  while IFS=',' read -r course_id repo_url name semester; do
+    # Skip comments and empty lines
+    [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
+
+    if [[ "$repo_url" == "$course_url" ]]; then
+      echo "$course_id"
       return 0
     fi
-  done
+  done < "$REGISTRY_FILE"
+
   return 1
 }
 
@@ -203,22 +263,29 @@ echo_error() {
 usage() {
   echo "Usage $0:"
   echo "Commands:"
+  echo "  init                Setup courses directory"
   echo "  setup <course>      Clone and run course setup"
   echo "  list                List downloaded courses"
   echo "  upgrade <basename>  Upgrade course to the latest version"
   echo "  update              Update ccc to the latest version"
   echo ""
 
-  echo "Available courses:"
-  for course in "${!COURSE_URLS[@]}"; do
-    echo "  $course"
-  done
+  echo ""
+  list_available_courses
 
-  echo "Example: $0 setup 300"
+  echo ""
+  echo "Example: $0 setup csci-0300-demo"
   exit 0
 }
 
 main() {
+  # ccc init - setup courses directory
+  if [[ "$#" -eq 1 && "$1" == "init" ]]; then
+    init_courses_dir
+    exit 0
+  fi
+
+  # For all other commands, check that environment is set up
   init
 
   # ccc list

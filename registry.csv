@@ -1,0 +1,7 @@
+# Common Course Containers - Local Course Registry
+# Format: course_id,repository_url,course_name,semester
+# Lines starting with # are comments
+
+csci-0300-demo,https://github.com/qiaochloe/csci-0300-demo.git,Systems Programming,fall2024
+csci-1680-demo,https://github.com/qiaochloe/csci-1680-demo.git,Computer Networks,spring2025
+example,https://github.com/qiaochloe/example-course-repo.git,Example Course,demo

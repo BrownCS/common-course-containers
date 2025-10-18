@@ -259,8 +259,16 @@ check_container_runtime() {
     return 0
   fi
 
-  echo "Container runtime '$CONTAINER_RUNTIME' not found"
-  echo "Please install '$CONTAINER_RUNTIME'"
+  # Check if they have docker instead
+  if command -v docker >/dev/null; then
+    echo_error "Found Docker but this system requires Podman"
+    echo "Please install Podman: https://podman.io/getting-started/installation"
+    echo "Docker is not compatible with this course container system."
+  else
+    echo_error "Container runtime '$CONTAINER_RUNTIME' not found"
+    echo "Please install Podman: https://podman.io/getting-started/installation"
+  fi
+
   exit 1
 }
 
