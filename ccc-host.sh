@@ -1,16 +1,64 @@
 #!/usr/bin/env bash
 
 VERSION="1.0.5"
-# Configurable base directory - defaults to ./courses for host, can be overridden
-BASE_DIR="${CCC_COURSES_DIR:-./courses}"
+
+# Determine base directory based on context
+get_base_dir() {
+  # Check if explicitly set
+  if [[ -n "$CCC_COURSES_DIR" ]]; then
+    echo "$CCC_COURSES_DIR"
+    return
+  fi
+
+  # Auto-detect based on likely container environment
+  if [[ -f /.dockerenv ]] || [[ -f /run/.containerenv ]] || [[ -d "/home/courses" ]]; then
+    echo "/home/courses"
+  else
+    echo "./courses"
+  fi
+}
+
+BASE_DIR="$(get_base_dir)"
 
 # Self-update
 SELF="$(realpath "$0")"
 REMOTE_SELF="https://raw.githubusercontent.com/BrownCS/common-course-containers/main/ccc.sh"
 
+# Container configuration (from run-podman)
+IMAGE_NAME="cs-courses"
+CONTAINER_NAME="cs-courses"
+CONTAINER_RUNTIME="podman"
+VOLUME_PATH="$SCRIPT_DIR/courses"
+NETWORK_NAME="net-cs-courses"
+ARCH="$(uname -m)"
+
+# Platform detection
+if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+  PLATFORM="linux/arm64"
+  CONTAINERFILE_PATH="$SCRIPT_DIR/Dockerfile.arm64"
+else
+  PLATFORM="linux/amd64"
+  CONTAINERFILE_PATH="$SCRIPT_DIR/Dockerfile.amd64"
+fi
+
 # Registry file location
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
+
+# Load library functions
+source_lib() {
+  local lib="$1"
+  local lib_file="$SCRIPT_DIR/lib/$lib.sh"
+
+  if [[ -f "$lib_file" ]]; then
+    source "$lib_file"
+  else
+    echo_error "Library file not found: $lib_file"
+    exit 1
+  fi
+}
+
+# Note: Container lib will be loaded conditionally later
 
 # Registry functions (CSV-based, bash 3.2+ compatible)
 get_course_url() {
@@ -47,6 +95,72 @@ list_available_courses() {
     [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
     echo "  $course_id"
   done < "$REGISTRY_FILE"
+}
+
+# Host script - assumes always running on host
+# No environment detection needed
+
+# Basic container management functions
+check_container_runtime() {
+  if command -v "$CONTAINER_RUNTIME" >/dev/null; then
+    return 0
+  fi
+
+  # Check if they have docker instead
+  if command -v docker >/dev/null; then
+    echo_error "Found Docker but this system requires Podman"
+    echo "Please install Podman: https://podman.io/getting-started/installation"
+    echo "Docker is not compatible with this course container system."
+  else
+    echo_error "Container runtime '$CONTAINER_RUNTIME' not found"
+    echo "Please install Podman: https://podman.io/getting-started/installation"
+  fi
+
+  exit 1
+}
+
+has_container() {
+  "$CONTAINER_RUNTIME" container exists "$CONTAINER_NAME" &>/dev/null
+}
+
+has_image() {
+  "$CONTAINER_RUNTIME" image exists "$IMAGE_NAME" &>/dev/null
+}
+
+# Smart delegation - execute course commands in container
+delegate_to_container() {
+  local command="$1"
+  shift
+  local args="$@"
+
+  # Ensure container is running
+  if ! has_container; then
+    echo "Container not found. Building and starting..."
+    build_image
+    # Start container in detached mode for command execution
+    if ! [[ -d courses ]]; then
+      mkdir courses
+    fi
+    echo_and_run "$CONTAINER_RUNTIME" run -d \
+      --name "$CONTAINER_NAME" \
+      --platform "$PLATFORM" \
+      --network "${NETWORK_NAME}" \
+      --privileged \
+      --volume "$VOLUME_PATH":/home/courses \
+      --workdir /home/courses \
+      "$IMAGE_NAME" sleep infinity
+  fi
+
+  # Check if container is running
+  local status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null)
+  if [[ "$status" != "running" ]]; then
+    echo "Starting container..."
+    "$CONTAINER_RUNTIME" start "$CONTAINER_NAME"
+  fi
+
+  # Execute command inside container
+  echo "Executing: ccc $command $args"
+  "$CONTAINER_RUNTIME" exec "$CONTAINER_NAME" ccc "$command" $args
 }
 
 init() {
@@ -259,24 +373,32 @@ echo_error() {
   echo -e "${RED}${text}${RESET}"
 }
 
-# Usage
+# Usage - host context only
 usage() {
   echo "Usage $0:"
-  echo "Commands:"
-  echo "  init                Setup courses directory"
-  echo "  setup <course>      Clone and run course setup"
-  echo "  list                List downloaded courses"
-  echo "  upgrade <basename>  Upgrade course to the latest version"
-  echo "  update              Update ccc to the latest version"
+  echo "Container Commands:"
+  echo "  build               Build container image"
+  echo "  run                 Start/attach to container"
+  echo "  clean               Remove containers and images"
+  echo "  status              Show container status"
   echo ""
-
+  echo "Course Commands (delegates to container):"
+  echo "  setup <course>      Setup course (starts container if needed)"
+  echo "  list                List courses (from container)"
+  echo "  upgrade <course>    Upgrade course (in container)"
+  echo ""
+  echo "Utility Commands:"
+  echo "  init                Setup courses directory"
+  echo "  update              Update ccc script"
   echo ""
   list_available_courses
-
   echo ""
   echo "Example: $0 setup csci-0300-demo"
   exit 0
 }
+
+# Load container management functions (always needed on host)
+source_lib "container"
 
 main() {
   # ccc init - setup courses directory
@@ -288,27 +410,55 @@ main() {
   # For all other commands, check that environment is set up
   init
 
-  # ccc list
+  # ccc setup <course> - delegate to container
+  if [[ "$#" -eq 2 && ("$1" == "setup" || "$1" == "s") ]]; then
+    delegate_to_container "setup" "$2"
+    exit 0
+  fi
+
+  # ccc list - delegate to container
   if [[ "$#" -eq 1 && ("$1" == "list" || "$1" == "ls") ]]; then
-    list_courses
+    delegate_to_container "list"
     exit 0
   fi
 
-  # ccc setup <course>
-  if [[ "$#" -eq 2 && "$1" == "setup" || "$1" == "s" ]]; then
-    setup_course "$2"
-    exit 0
-  fi
-
-  # ccc upgrade <course>
+  # ccc upgrade <course> - delegate to container
   if [[ "$#" -eq 2 && "$1" == "upgrade" ]]; then
-    upgrade_course "$2"
+    delegate_to_container "upgrade" "$2"
     exit 0
   fi
 
   # ccc update
   if [[ "$#" -eq 1 && "$1" == "update" ]]; then
     update_self
+    exit 0
+  fi
+
+  # Container commands
+  if [[ "$#" -eq 1 && "$1" == "build" ]]; then
+    check_container_runtime
+    show_container_status
+    build_image
+    exit 0
+  fi
+
+  if [[ "$#" -eq 1 && "$1" == "run" ]]; then
+    check_container_runtime
+    show_container_status
+    build_image
+    run_container
+    exit 0
+  fi
+
+  if [[ "$#" -eq 1 && "$1" == "clean" ]]; then
+    check_container_runtime
+    remove_containers
+    remove_image
+    exit 0
+  fi
+
+  if [[ "$#" -eq 1 && "$1" == "status" ]]; then
+    show_container_status
     exit 0
   fi
 
