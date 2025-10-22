@@ -31,7 +31,6 @@ ccc run csci-0300-demo
 
 - **Podman** (required)
 - **Git** (required)
-- **direnv** (required)
 
 ## Commands
 

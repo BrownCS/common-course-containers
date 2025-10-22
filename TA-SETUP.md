@@ -11,7 +11,7 @@ Your course repo needs these two files:
 # Standard environment (don't change these)
 export DEBIAN_FRONTEND=noninteractive
 export TZ=America/New_York
-export LANG=en_US.UTF-8
+export LANG=en_US.UTF-8 # TODO: why do we need this tho?
 export PATH=$PWD/bin:$PATH
 
 # Course-specific additions (customize below)
