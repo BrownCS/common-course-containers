@@ -300,24 +300,29 @@ run_container_for_course() {
   container_name="$(get_container_name "$course")"
   image_name="$(get_image_name "$course")"
 
+  # Determine target working directory
+  local course_workdir="/courses"
+  if [[ "$course" != "default" && -d "$VOLUME_PATH/$course" ]]; then
+    course_workdir="/courses/$course"
+  fi
+
   if has_container "$course"; then
-    # Start existing container and cd to course directory if it exists
+    # Start existing container and cd to appropriate directory
     local status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$container_name")
-    local course_workdir="/courses"
-    if [[ -d "$VOLUME_PATH/$course" ]]; then
-      course_workdir="/courses/$course"
-    fi
 
     if [[ "$status" == "running" ]]; then
       echo "Container '$container_name' is already running. Attaching..."
-      if [[ "$course_workdir" != "/courses" ]]; then
-        echo_and_run "$CONTAINER_RUNTIME" exec -it "$container_name" bash -c "cd '$course_workdir' && exec bash"
-      else
-        echo_and_run "$CONTAINER_RUNTIME" exec -it "$container_name" bash
-      fi
+      echo_and_run "$CONTAINER_RUNTIME" exec -it "$container_name" bash -c "cd '$course_workdir' && exec bash"
     else
       echo "Container '$container_name' exists but is not running. Starting..."
-      echo_and_run "$CONTAINER_RUNTIME" start -ai "$container_name"
+      if [[ "$course" == "default" ]]; then
+        # For default, explicitly start and exec to ensure we're in /courses
+        echo_and_run "$CONTAINER_RUNTIME" start "$container_name"
+        echo_and_run "$CONTAINER_RUNTIME" exec -it "$container_name" bash -c "cd '$course_workdir' && exec bash"
+      else
+        # For courses, use start -ai to preserve existing behavior
+        echo_and_run "$CONTAINER_RUNTIME" start -ai "$container_name"
+      fi
     fi
   else
     # Create new interactive container with proper user setup
@@ -326,13 +331,7 @@ run_container_for_course() {
     local orig_image_name="$IMAGE_NAME"
     CONTAINER_NAME="$container_name"
     IMAGE_NAME="$image_name"
-
-    # Set working directory to course if it exists
-    if [[ -d "$VOLUME_PATH/$course" ]]; then
-      CONTAINER_WORKDIR="/courses/$course"
-    else
-      CONTAINER_WORKDIR="/courses"
-    fi
+    CONTAINER_WORKDIR="$course_workdir"
 
     # Call existing start_new_container function (creates interactive container with user setup)
     start_new_container
