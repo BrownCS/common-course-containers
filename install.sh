@@ -132,6 +132,7 @@ validate_source() {
 
     local required_files=(
         "ccc-host.sh"
+        "ccc-container.sh"
         "lib/utils.sh"
         "lib/courses.sh"
         "lib/container.sh"
@@ -172,10 +173,11 @@ install_files() {
     # Copy library files
     cp "$REPO_DIR/lib/"*.sh "$SHARE_DIR/lib/"
 
-    # Copy registry, VERSION file, and Dockerfile template
+    # Copy registry, VERSION file, Dockerfile template, and container script
     cp "$REPO_DIR/registry.csv" "$SHARE_DIR/"
     cp "$REPO_DIR/VERSION" "$SHARE_DIR/"
     cp "$REPO_DIR/Dockerfile.template" "$SHARE_DIR/"
+    cp "$REPO_DIR/ccc-container.sh" "$SHARE_DIR/"
 
     # Script already has path detection built-in, no modification needed
 
