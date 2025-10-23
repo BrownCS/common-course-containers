@@ -40,12 +40,9 @@ get_base_dir() {
 # Self-update (now handled by install.sh via update_self function)
 SELF="$(realpath "$0")"
 
-# Container configuration (from run-podman)
-IMAGE_NAME="ccc"
-CONTAINER_NAME="ccc-default"
+# Container configuration (will be set after settings are loaded)
 CONTAINER_RUNTIME="podman"
 # VOLUME_PATH will be set in main() after libraries are loaded
-NETWORK_NAME="net-ccc"
 ARCH="$(uname -m)"
 
 # Platform detection
@@ -76,6 +73,14 @@ source_lib() {
 # Load shared libraries
 source_lib "utils"
 source_lib "courses"
+
+# Load settings (after utils is loaded)
+load_settings
+
+# Set container configuration from settings
+IMAGE_NAME="$CCC_IMAGE_PREFIX"
+CONTAINER_NAME="$CCC_IMAGE_PREFIX-default"
+NETWORK_NAME="$CCC_NETWORK_NAME"
 
 # Note: Container lib will be loaded conditionally later
 
@@ -176,10 +181,15 @@ delegate_to_container() {
     --platform "$PLATFORM" \
     --network "${NETWORK_NAME}" \
     --privileged \
-    --volume "$VOLUME_PATH":/courses \
-    --workdir /courses \
-    --env CCC_COURSES_BASE_DIR=/courses \
+    --volume "$VOLUME_PATH":"$CCC_MOUNT_PATH" \
+    --workdir "$CCC_MOUNT_PATH" \
+    --env CCC_COURSES_BASE_DIR="$CCC_MOUNT_PATH" \
     --env DIRENV_CONFIG=/root/.config/direnv \
+    --env CCC_IMAGE_PREFIX="$CCC_IMAGE_PREFIX" \
+    --env CCC_NETWORK_NAME="$CCC_NETWORK_NAME" \
+    --env CCC_DEFAULT_BASE_IMAGE="$CCC_DEFAULT_BASE_IMAGE" \
+    --env CCC_MOUNT_PATH="$CCC_MOUNT_PATH" \
+    --env CCC_UPDATE_REPO="$CCC_UPDATE_REPO" \
     "$image_name" \
     ccc $([ "$VERBOSE" = "true" ] && echo "--verbose") "$command" $args
   local exit_code=$?
@@ -219,8 +229,10 @@ init_courses_dir() {
   fi
 
   save_courses_dir "$courses_dir"
+  create_default_settings
 
   echo "Configuration saved to: $(get_config_file)"
+  echo "Settings file created at: $(get_settings_file)"
   echo "Setup complete! You can now run 'ccc setup <course>' to install courses."
   echo "You can run 'ccc run <course>' to start a container."
 }
@@ -297,7 +309,7 @@ build_image_for_course() {
 
   if [[ "$base_image" == "default" || -z "$base_image" ]]; then
     # Use default base image
-    build_image "ubuntu:noble" "$image_name"
+    build_image "$CCC_DEFAULT_BASE_IMAGE" "$image_name"
   else
     # Use course-specific base image
     build_image "$base_image" "$image_name"
@@ -312,9 +324,9 @@ run_container_for_course() {
   image_name="$(get_image_name "$course")"
 
   # Determine target working directory
-  local course_workdir="/courses"
+  local course_workdir="$CCC_MOUNT_PATH"
   if [[ "$course" != "default" && -d "$VOLUME_PATH/$course" ]]; then
-    course_workdir="/courses/$course"
+    course_workdir="$CCC_MOUNT_PATH/$course"
   fi
 
   if has_container "$course"; then
@@ -459,7 +471,7 @@ main() {
     log_info "Checking container status..."
     show_container_status
     log_info "Building container image..."
-    build_image "ubuntu:noble" "ccc"
+    build_image "$CCC_DEFAULT_BASE_IMAGE" "$CCC_IMAGE_PREFIX"
     log_success "Image build completed"
     exit 0
   fi
