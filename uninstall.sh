@@ -99,8 +99,29 @@ remove_files() {
         log_success "Removed $SHARE_DIR"
     fi
 
-    # Remove user configuration (only for user installations to avoid affecting other users)
+    # Handle courses directory and configuration
+    local courses_dir=""
     if [[ "$INSTALL_MODE" == "user" ]] && [[ -f "$HOME/.config/ccc/config" ]]; then
+        # Read courses directory from config
+        source "$HOME/.config/ccc/config" 2>/dev/null || true
+        courses_dir="$COURSES_DIR"
+
+        # Ask user about courses directory
+        if [[ -n "$courses_dir" ]] && [[ -d "$courses_dir" ]]; then
+            echo ""
+            log_warning "Found courses directory: $courses_dir"
+            echo "This contains your course files and data."
+            read -p "Remove courses directory? [y/N] " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -rf "$courses_dir"
+                log_success "Removed courses directory: $courses_dir"
+            else
+                log_info "Kept courses directory: $courses_dir"
+            fi
+        fi
+
+        # Remove configuration
         rm -f "$HOME/.config/ccc/config"
         # Remove directory if empty
         rmdir "$HOME/.config/ccc" 2>/dev/null || true

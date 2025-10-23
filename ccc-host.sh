@@ -147,6 +147,11 @@ has_image() {
 
 # Execute commands inside container
 delegate_to_container() {
+  # TODO: This function has error handling issues that need to be addressed:
+  # 1. Error messages from container scripts can get swallowed or not displayed properly
+  # 2. Exit codes are captured but stdout/stderr buffering can hide error messages
+  # 3. The --interactive --tty flags were added to help but may cause issues in non-interactive environments
+  # 4. Consider redesigning to have better error propagation or move more validation to host
   local command="$1"
   shift
   local args="$@"
@@ -165,6 +170,8 @@ delegate_to_container() {
 
   # Run command in temporary container with proper user setup
   "$CONTAINER_RUNTIME" run --rm \
+    --interactive \  # TODO: May cause issues in non-interactive environments (CI/CD)
+    --tty \          # TODO: May cause issues when no TTY available
     --userns keep-id:uid=$(id -u),gid=$(id -g) \
     --platform "$PLATFORM" \
     --network "${NETWORK_NAME}" \
@@ -175,6 +182,10 @@ delegate_to_container() {
     --env DIRENV_CONFIG=/root/.config/direnv \
     "$image_name" \
     ccc $([ "$VERBOSE" = "true" ] && echo "--verbose") "$command" $args
+  local exit_code=$?
+  if [[ $exit_code -ne 0 ]]; then
+    exit $exit_code
+  fi
 }
 
 init() {
@@ -400,9 +411,18 @@ main() {
   # For all other commands, check that environment is set up
   init
 
-  # ccc setup <course> - delegate to container
+  # ccc setup <course> - validate then delegate to container
   if [[ "$#" -eq 2 && ("$1" == "setup" || "$1" == "s") ]]; then
-    delegate_to_container "setup" "$2"
+    local course="$2"
+    # Validate course exists in registry (allow default even with empty URL)
+    if [[ "$course" != "default" ]] && ! get_course_url "$course" >/dev/null 2>&1; then
+      log_error "Course '$course' not found in registry"
+      list_available_courses
+      exit 1
+    fi
+    # TODO: delegate_to_container should properly propagate all error messages and exit codes
+    # Currently errors from container scripts can get swallowed or not displayed properly
+    delegate_to_container "setup" "$course"
     exit 0
   fi
 
@@ -412,9 +432,18 @@ main() {
     exit 0
   fi
 
-  # ccc update <course> - delegate to container
+  # ccc update <course> - validate then delegate to container
   if [[ "$#" -eq 2 && "$1" == "update" ]]; then
-    delegate_to_container "update" "$2"
+    local course="$2"
+    # Validate course exists in registry
+    if ! get_course_url "$course" >/dev/null 2>&1; then
+      log_error "Course '$course' not found in registry"
+      list_available_courses
+      exit 1
+    fi
+    # TODO: delegate_to_container should properly propagate all error messages and exit codes
+    # Currently errors from container scripts can get swallowed or not displayed properly
+    delegate_to_container "update" "$course"
     exit 0
   fi
 

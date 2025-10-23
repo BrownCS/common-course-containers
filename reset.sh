@@ -83,18 +83,28 @@ done
 # 4. Clean up configuration and courses directory
 log_info "Cleaning up CCC configuration and courses..."
 
+# Read courses directory from config before removing it
+courses_dir=""
+if [[ -f "$HOME/.config/ccc/config" ]]; then
+    source "$HOME/.config/ccc/config" 2>/dev/null || true
+    courses_dir="$COURSES_DIR"
+fi
+
+# Remove courses directory (if configured)
+if [[ -n "$courses_dir" ]] && [[ -d "$courses_dir" ]]; then
+    echo "  Removing configured courses directory: $courses_dir"
+    rm -rf "$courses_dir"
+elif [[ -d "./courses" ]]; then
+    echo "  Removing local courses directory: ./courses"
+    rm -rf "./courses"
+fi
+
 # Remove configuration file
 if [[ -f "$HOME/.config/ccc/config" ]]; then
     echo "  Removing CCC configuration: $HOME/.config/ccc/config"
     rm -f "$HOME/.config/ccc/config"
     # Remove directory if empty
     rmdir "$HOME/.config/ccc" 2>/dev/null || true
-fi
-
-# Remove local courses directory (common case)
-if [[ -d "./courses" ]]; then
-    echo "  Removing ./courses directory"
-    rm -rf "./courses"
 fi
 
 # 5. Clean up generated Dockerfiles
