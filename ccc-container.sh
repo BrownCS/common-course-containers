@@ -36,6 +36,17 @@ source_lib() {
 source_lib "utils"
 source_lib "courses"
 
+# Settings are passed as environment variables from host
+# Set defaults in case environment variables are not provided
+CCC_IMAGE_PREFIX="${CCC_IMAGE_PREFIX:-ccc}"
+CCC_NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
+CCC_DEFAULT_BASE_IMAGE="${CCC_DEFAULT_BASE_IMAGE:-ubuntu:noble}"
+CCC_MOUNT_PATH="${CCC_MOUNT_PATH:-/courses}"
+CCC_UPDATE_REPO="${CCC_UPDATE_REPO:-BrownCS/common-course-containers}"
+
+# Derive dependent values
+CCC_UPDATE_API_URL="https://api.github.com/repos/$CCC_UPDATE_REPO/releases/latest"
+
 # Course and utility functions loaded from shared libraries
 
 init() {

@@ -116,6 +116,11 @@ setup_course() {
   local script="$dirpath/setup.sh"
 
   # Find the course_url
+  # TODO: Error messages from setup_course are getting swallowed when run inside container
+  # This should display error for invalid courses but may not be visible due to:
+  # 1. Output buffering in container environment
+  # 2. exit 1 terminating before output is flushed
+  # 3. Potential issues with echo_error function in container context
   if [[ $? -ne 0 || -z "$course_url" ]]; then
     echo_error "ERROR: Could not find remote course repository for '$course'"
     echo "(1) To install a course repository manually, run: "

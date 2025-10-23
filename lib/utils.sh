@@ -48,6 +48,10 @@ get_config_file() {
   echo "$(get_config_dir)/config"
 }
 
+get_settings_file() {
+  echo "$(get_config_dir)/settings"
+}
+
 save_courses_dir() {
   local courses_dir="$1"
   local config_dir="$(get_config_dir)"
@@ -120,7 +124,7 @@ version_compare() {
 
 # Get latest version from GitHub releases
 get_latest_version() {
-  local repo_url="https://api.github.com/repos/BrownCS/common-course-containers/releases/latest"
+  local repo_url="$CCC_UPDATE_API_URL"
 
   if command -v curl >/dev/null 2>&1; then
     curl -s "$repo_url" 2>/dev/null | grep '"tag_name"' | sed 's/.*"v\?\([^"]*\)".*/\1/' 2>/dev/null
@@ -156,7 +160,7 @@ update_self() {
   echo "Downloading and running installer..."
 
   # Download installer
-  local installer_url="https://raw.githubusercontent.com/BrownCS/common-course-containers/v${latest_version}/install.sh"
+  local installer_url="https://raw.githubusercontent.com/$CCC_UPDATE_REPO/v${latest_version}/install.sh"
   local tmp_installer=$(mktemp)
 
   if command -v curl >/dev/null 2>&1; then
@@ -191,5 +195,55 @@ update_self() {
   else
     echo_error "Installation failed"
     return 1
+  fi
+}
+
+# Settings management
+load_settings() {
+  # Set defaults first
+  CCC_IMAGE_PREFIX="${CCC_IMAGE_PREFIX:-ccc}"
+  CCC_NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
+  CCC_DEFAULT_BASE_IMAGE="${CCC_DEFAULT_BASE_IMAGE:-ubuntu:noble}"
+  CCC_MOUNT_PATH="${CCC_MOUNT_PATH:-/courses}"
+  CCC_UPDATE_REPO="${CCC_UPDATE_REPO:-BrownCS/common-course-containers}"
+
+  # Load user settings if they exist (only on host, not in container)
+  local settings_file="$(get_settings_file)"
+  if [[ -f "$settings_file" ]]; then
+    source "$settings_file"
+  fi
+
+  # Derive dependent values
+  CCC_UPDATE_API_URL="https://api.github.com/repos/$CCC_UPDATE_REPO/releases/latest"
+}
+
+create_default_settings() {
+  local settings_file="$(get_settings_file)"
+  local config_dir="$(get_config_dir)"
+
+  # Ensure config directory exists
+  mkdir -p "$config_dir"
+
+  # Create default settings file if it doesn't exist
+  if [[ ! -f "$settings_file" ]]; then
+    cat > "$settings_file" << 'EOF'
+# CCC Settings Configuration
+# Customize these values to override defaults
+
+# Container Configuration
+CCC_IMAGE_PREFIX=ccc
+CCC_NETWORK_NAME=net-ccc
+CCC_DEFAULT_BASE_IMAGE=ubuntu:noble
+CCC_MOUNT_PATH=/courses
+
+# Update Repository
+CCC_UPDATE_REPO=BrownCS/common-course-containers
+
+# Uncomment and modify any settings you want to customize
+# CCC_IMAGE_PREFIX=my-ccc
+# CCC_NETWORK_NAME=my-net-ccc
+# CCC_DEFAULT_BASE_IMAGE=ubuntu:jammy
+EOF
+    echo "Created default settings file: $settings_file"
   fi
 }

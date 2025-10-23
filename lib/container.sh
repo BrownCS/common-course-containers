@@ -43,7 +43,7 @@ remove_network() {
 
 # Image management
 generate_dockerfile() {
-  local base_image="${1:-ubuntu:noble}"
+  local base_image="${1:-$CCC_DEFAULT_BASE_IMAGE}"
   local arch="${2:-amd64}"
   local template_file="$SCRIPT_DIR/Dockerfile.template"
   local output_file="$SCRIPT_DIR/Dockerfile.generated.$arch"
@@ -67,7 +67,7 @@ validate_base_image() {
   else
     echo_error "Unsupported base image: $base_image"
     echo "Currently supported base images:"
-    echo "  - ubuntu:noble"
+    echo "  - $CCC_DEFAULT_BASE_IMAGE"
     echo "  - ubuntu:jammy"
     echo "  - ubuntu:focal"
     echo "  - debian:bookworm"
@@ -77,7 +77,7 @@ validate_base_image() {
 }
 
 build_image() {
-  local base_image="${1:-ubuntu:noble}" # Default to ubuntu:noble
+  local base_image="${1:-$CCC_DEFAULT_BASE_IMAGE}" # Default to ubuntu:noble
   local image_name="${2:-ccc}"          # Default to ccc
   local arch="${ARCH}"
 
