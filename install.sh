@@ -131,13 +131,14 @@ validate_source() {
     log_info "Validating source files..."
 
     local required_files=(
-        "ccc-host.sh"
-        "ccc-container.sh"
-        "lib/utils.sh"
-        "lib/courses.sh"
-        "lib/container.sh"
+        "ccc.sh"
         "registry.csv"
         "Dockerfile.template"
+        "VERSION"
+    )
+
+    local required_dirs=(
+        "lib"
     )
 
     for file in "${required_files[@]}"; do
@@ -147,6 +148,21 @@ validate_source() {
             exit 1
         fi
     done
+
+    for dir in "${required_dirs[@]}"; do
+        if [[ ! -d "$REPO_DIR/$dir" ]]; then
+            log_error "Required directory not found: $dir"
+            echo "Make sure you're running this script from the CCC repository root"
+            exit 1
+        fi
+    done
+
+    # Check that lib directory has shell scripts
+    if ! ls "$REPO_DIR/lib/"*.sh >/dev/null 2>&1; then
+        log_error "No shell scripts found in lib directory"
+        echo "Make sure you're running this script from the CCC repository root"
+        exit 1
+    fi
 
     log_success "All source files validated"
 }
@@ -167,17 +183,16 @@ install_files() {
     log_info "Installing CCC files..."
 
     # Copy main script
-    cp "$REPO_DIR/ccc-host.sh" "$MAIN_SCRIPT"
+    cp "$REPO_DIR/ccc.sh" "$MAIN_SCRIPT"
     chmod +x "$MAIN_SCRIPT"
 
     # Copy library files
     cp "$REPO_DIR/lib/"*.sh "$SHARE_DIR/lib/"
 
-    # Copy registry, VERSION file, Dockerfile template, and container script
+    # Copy registry, VERSION file, and Dockerfile template
     cp "$REPO_DIR/registry.csv" "$SHARE_DIR/"
     cp "$REPO_DIR/VERSION" "$SHARE_DIR/"
     cp "$REPO_DIR/Dockerfile.template" "$SHARE_DIR/"
-    cp "$REPO_DIR/ccc-container.sh" "$SHARE_DIR/"
 
     # Script already has path detection built-in, no modification needed
 
