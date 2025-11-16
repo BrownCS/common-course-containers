@@ -49,7 +49,7 @@ RUN mkdir -p /courses && chmod 755 /courses
 RUN touch /etc/ccc-container
 
 # Copy ccc, libraries, registry, and apt-sandbox
-COPY ccc-container.sh /usr/local/bin/ccc
+COPY ccc.sh /usr/local/bin/ccc
 COPY lib/ /usr/local/bin/lib/
 COPY registry.csv /usr/local/bin/registry.csv
 COPY apt-sandbox.sh /usr/local/bin/apt-sandbox
