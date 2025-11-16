@@ -1,0 +1,3 @@
+# Exclude courses directory - should be mount point for containers
+courses/
+.bash_history
