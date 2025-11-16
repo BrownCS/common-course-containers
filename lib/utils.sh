@@ -252,3 +252,8 @@ EOF
     echo "Created default settings file: $settings_file"
   fi
 }
+
+# Auto-load settings when utils is sourced (host mode only)
+if ! is_ccc_container; then
+  load_settings
+fi

@@ -109,7 +109,7 @@ build_image() {
   fi
 
   echo "Building $CONTAINER_RUNTIME image '$image_name' with base '$base_image' for $PLATFORM..."
-  echo_and_run "$CONTAINER_RUNTIME" build -t "$image_name" -f "$dockerfile_path" --platform "${PLATFORM}" .
+  echo_and_run "$CONTAINER_RUNTIME" build -t "$image_name" -f "$dockerfile_path" --platform "${PLATFORM}" "$SCRIPT_DIR"
   local build_result=$?
 
   # Cleanup generated Dockerfile

@@ -37,6 +37,7 @@ if is_ccc_container; then
 else
   # Host mode - load host functionality and run
   source_lib "courses"
+  source_lib "container"
   source_lib "runtime"
   source_lib "host_mode"
   host_main "$@"

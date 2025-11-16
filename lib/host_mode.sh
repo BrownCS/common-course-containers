@@ -5,10 +5,7 @@ set -euo pipefail
 # Global flags
 VERBOSE=false
 
-# Load settings (after utils is loaded)
-load_settings
-
-# Container configuration from settings
+# Container configuration from settings (loaded automatically in utils.sh)
 IMAGE_NAME="$CCC_IMAGE_PREFIX"
 CONTAINER_NAME="$CCC_IMAGE_PREFIX-default"
 NETWORK_NAME="$CCC_NETWORK_NAME"

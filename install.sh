@@ -135,6 +135,7 @@ validate_source() {
         "registry.csv"
         "Dockerfile.template"
         "VERSION"
+        "apt-sandbox.sh"
     )
 
     local required_dirs=(
@@ -186,13 +187,17 @@ install_files() {
     cp "$REPO_DIR/ccc.sh" "$MAIN_SCRIPT"
     chmod +x "$MAIN_SCRIPT"
 
+    # Also copy ccc.sh to share directory for Docker build context
+    cp "$REPO_DIR/ccc.sh" "$SHARE_DIR/"
+
     # Copy library files
     cp "$REPO_DIR/lib/"*.sh "$SHARE_DIR/lib/"
 
-    # Copy registry, VERSION file, and Dockerfile template
+    # Copy registry, VERSION file, Dockerfile template, and apt-sandbox
     cp "$REPO_DIR/registry.csv" "$SHARE_DIR/"
     cp "$REPO_DIR/VERSION" "$SHARE_DIR/"
     cp "$REPO_DIR/Dockerfile.template" "$SHARE_DIR/"
+    cp "$REPO_DIR/apt-sandbox.sh" "$SHARE_DIR/"
 
     # Script already has path detection built-in, no modification needed
 

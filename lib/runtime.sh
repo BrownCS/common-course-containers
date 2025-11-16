@@ -85,15 +85,28 @@ delegate_to_container() {
 
   local image_name="$(get_image_name "$course")"
 
+  # Debug logging
+  log_info "course='$course'"
+  log_info "image_name='$image_name'"
+  log_info "CCC_IMAGE_PREFIX='${CCC_IMAGE_PREFIX:-UNSET}'"
+  log_info "IMAGE_NAME='${IMAGE_NAME:-UNSET}'"
+
   # Ensure network and image exist
   create_network
   build_image_for_course "$course"
 
+  # Debug the container run command
+  log_info "About to run container with image: '$image_name'"
+  log_info "Full command args: $command $args"
+  log_info "CONTAINER_RUNTIME: $CONTAINER_RUNTIME"
+  log_info "PLATFORM: $PLATFORM"
+  log_info "NETWORK_NAME: $NETWORK_NAME"
+
   # Run command in temporary container with proper user setup
   "$CONTAINER_RUNTIME" run --rm \
-    --interactive \  # TODO: May cause issues in non-interactive environments (CI/CD)
-  --tty \            # TODO: May cause issues when no TTY available
-  --userns keep-id:uid=$(id -u),gid=$(id -g) \
+    --interactive \
+    --tty \
+    --userns keep-id:uid=$(id -u),gid=$(id -g) \
     --platform "$PLATFORM" \
     --network "${NETWORK_NAME}" \
     --privileged \
