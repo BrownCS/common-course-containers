@@ -1,43 +1,30 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
+# Container mode functionality (from ccc-container.sh)
 
-# CCC Container Script - Course Management Only
-# This runs inside the container and provides course management commands
-
-# VERSION is loaded from lib/utils.sh get_version() function
+# Container-specific settings
 BASE_DIR="${CCC_COURSES_BASE_DIR:-/courses}"
 
-# Container-specific function for compatibility with shared libs
+# Container-specific function for compatibility
 get_base_dir() {
   echo "$BASE_DIR"
 }
 
-# Self-update (now handled by install.sh via update_self function)
-SELF="$(realpath "$0")"
+# Settings are passed as environment variables from host
+# Set defaults in case environment variables are not provided
+CCC_IMAGE_PREFIX="${CCC_IMAGE_PREFIX:-ccc}"
+CCC_NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
+CCC_DEFAULT_BASE_IMAGE="${CCC_DEFAULT_BASE_IMAGE:-ubuntu:noble}"
+CCC_MOUNT_PATH="${CCC_MOUNT_PATH:-/courses}"
+CCC_UPDATE_REPO="${CCC_UPDATE_REPO:-BrownCS/common-course-containers}"
+
+# Derive dependent values
+CCC_UPDATE_API_URL="https://api.github.com/repos/$CCC_UPDATE_REPO/releases/latest"
 
 # Registry file location
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
 
-# Load library functions
-source_lib() {
-  local lib="$1"
-  local lib_file="$SCRIPT_DIR/lib/$lib.sh"
-
-  if [[ -f "$lib_file" ]]; then
-    source "$lib_file"
-  else
-    echo "ERROR: Library file not found: $lib_file" >&2
-    exit 1
-  fi
-}
-
-# Load shared libraries
-source_lib "utils"
-source_lib "courses"
-
-# Course and utility functions loaded from shared libraries
-
+# Container initialization
 init() {
   # Base directory should exist and be mounted
   if [[ ! -d "$BASE_DIR" ]]; then
@@ -53,9 +40,7 @@ init() {
   fi
 }
 
-# All course management and utility functions moved to shared libraries
-
-# Usage - container context only
+# Container usage
 usage() {
   echo "Usage ccc:"
   echo "Course Commands:"
@@ -71,7 +56,8 @@ usage() {
   exit 0
 }
 
-main() {
+# Container main function
+container_main() {
   # For all commands, check that we're in container environment
   init
 
@@ -111,5 +97,3 @@ main() {
 
   usage
 }
-
-main "$@"

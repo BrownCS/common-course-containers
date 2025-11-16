@@ -45,6 +45,9 @@ RUN mkdir -p /root/.config/direnv && \
 # Create courses directory for volume mounting
 RUN mkdir -p /courses && chmod 755 /courses
 
+# Create simple CCC container marker
+RUN touch /etc/ccc-container
+
 # Copy ccc, libraries, registry, and apt-sandbox
 COPY ccc-container.sh /usr/local/bin/ccc
 COPY lib/ /usr/local/bin/lib/
