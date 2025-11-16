@@ -155,8 +155,12 @@ host_main() {
     exit 0
   fi
 
-  # Set VOLUME_PATH for commands that need it
-  VOLUME_PATH="$(get_base_dir)"
+  # Check that environment is set up and set VOLUME_PATH
+  # Call get_base_dir directly - if it fails, it will show error and exit
+  if ! VOLUME_PATH="$(get_base_dir 2>&1)"; then
+    echo "$VOLUME_PATH" >&2
+    exit 1
+  fi
 
   # ccc config - show/modify configuration
   if [[ "$#" -eq 1 && "$1" == "config" ]]; then
