@@ -20,6 +20,11 @@ echo_error() {
   echo -e "${RED}${text}${RESET}"
 }
 
+# Container detection
+is_ccc_container() {
+  [[ -f /etc/ccc-container ]]
+}
+
 # Logging functions with prefixes
 log_info() {
   if [[ "${VERBOSE:-false}" == "true" ]]; then
