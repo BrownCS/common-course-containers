@@ -1,5 +1,22 @@
 #!/bin/bash
+set -euo pipefail
 # Container management functions (from run-podman)
+
+# Container runtime detection and setup
+detect_container_runtime() {
+  local runtime="podman"
+
+  if ! command -v podman >/dev/null 2>&1; then
+    if command -v docker >/dev/null 2>&1; then
+      runtime="docker"
+    else
+      log_error "No container runtime found (podman/docker)"
+      return 1
+    fi
+  fi
+
+  echo "$runtime"
+}
 
 # Network management
 has_network() {
@@ -15,16 +32,95 @@ create_network() {
   fi
 }
 
+remove_network() {
+  if has_network; then
+    echo "Removing network '$NETWORK_NAME'..."
+    echo_and_run "$CONTAINER_RUNTIME" network rm "$NETWORK_NAME"
+  else
+    echo "Network '$NETWORK_NAME' does not exist."
+  fi
+}
+
 # Image management
+generate_dockerfile() {
+  local base_image="${1:-$CCC_DEFAULT_BASE_IMAGE}"
+  local arch="${2:-amd64}"
+  local template_file="$SCRIPT_DIR/Dockerfile.template"
+  local output_file="$SCRIPT_DIR/Dockerfile.generated.$arch"
+
+  if [[ ! -f "$template_file" ]]; then
+    echo_error "Dockerfile template not found: $template_file"
+    return 1
+  fi
+
+  # Generate Dockerfile from template
+  sed "s|{{BASE_IMAGE}}|$base_image|g" "$template_file" >"$output_file"
+  echo "$output_file"
+}
+
+validate_base_image() {
+  local base_image="$1"
+
+  # Only support Ubuntu and Debian
+  if [[ "$base_image" =~ ^ubuntu: ]] || [[ "$base_image" =~ ^debian: ]]; then
+    return 0
+  else
+    echo_error "Unsupported base image: $base_image"
+    echo "Currently supported base images:"
+    echo "  - $CCC_DEFAULT_BASE_IMAGE"
+    echo "  - ubuntu:jammy"
+    echo "  - ubuntu:focal"
+    echo "  - debian:bookworm"
+    echo "  - debian:bullseye"
+    return 1
+  fi
+}
+
 build_image() {
-  if has_image; then
-    echo "Image '$IMAGE_NAME' already exists. Skipping build."
+  local base_image="${1:-$CCC_DEFAULT_BASE_IMAGE}" # Default to ubuntu:noble
+  local image_name="${2:-ccc}"          # Default to ccc
+  local arch="${ARCH}"
+
+  # Check if image already exists
+  if "$CONTAINER_RUNTIME" image exists "$image_name" &>/dev/null; then
+    echo "Image '$image_name' already exists. Skipping build."
     return 0
   fi
 
-  echo "Building $CONTAINER_RUNTIME image '$IMAGE_NAME' for $PLATFORM..."
-  echo_and_run "$CONTAINER_RUNTIME" build -t "$IMAGE_NAME" -f "$CONTAINERFILE_PATH" --platform "${PLATFORM}" .
-  if [[ $? -ne 0 ]]; then exit 1; fi
+  # Validate base image
+  if ! validate_base_image "$base_image"; then
+    return 1
+  fi
+
+  # Normalize architecture
+  if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
+    arch="arm64"
+  else
+    arch="amd64"
+  fi
+
+  # Generate Dockerfile from template
+  local dockerfile_path
+  dockerfile_path="$(generate_dockerfile "$base_image" "$arch")"
+
+  if [[ $? -ne 0 ]]; then
+    echo_error "Failed to generate Dockerfile"
+    return 1
+  fi
+
+  echo "Building $CONTAINER_RUNTIME image '$image_name' with base '$base_image' for $PLATFORM..."
+  echo_and_run "$CONTAINER_RUNTIME" build -t "$image_name" -f "$dockerfile_path" --platform "${PLATFORM}" .
+  local build_result=$?
+
+  # Cleanup generated Dockerfile
+  rm -f "$dockerfile_path"
+
+  if [[ $build_result -ne 0 ]]; then
+    echo_error "Build failed"
+    return 1
+  fi
+
+  echo "Successfully built image: $image_name"
 }
 
 remove_image() {
@@ -36,7 +132,8 @@ remove_image() {
 remove_containers() {
   local _name="${1:-${CONTAINER_NAME}}"
   echo "Removing all existing '$CONTAINER_NAME' containers..."
-  "$CONTAINER_RUNTIME" ps -a -f name=${_name} --format "{{.ID}}" | while read line; do
+  # Also remove any course-specific containers (ccc-* pattern)
+  "$CONTAINER_RUNTIME" ps -a -f name=ccc --format "{{.ID}}" | while read line; do
     echo_and_run "$CONTAINER_RUNTIME" rm --force $line
   done
 }
@@ -82,6 +179,13 @@ setup_xhost() {
   elif test "$(uname)" = Darwin; then # Mac OS
     do_xhost +localhost
   fi
+}
+
+# Container status helpers
+container_is_running() {
+  local container_name="$1"
+  local status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$container_name" 2>/dev/null || echo "missing")
+  [[ "$status" == "running" ]]
 }
 
 # Container lifecycle management
@@ -138,19 +242,21 @@ start_new_container() {
     --interactive \
     --tty \
     --name "$CONTAINER_NAME" \
+    --hostname "$CONTAINER_NAME" \
     --platform "$PLATFORM" \
     --network "${NETWORK_NAME}" \
     --privileged \
     --passwd \
     --group-entry "$group::$gid:$user" \
-    --passwd-entry "$user::$uid:$gid:Default User:/home/courses:/bin/bash" \
+    --passwd-entry "$user::$uid:$gid:Default User:/home/$user:/bin/bash" \
     --userns keep-id:uid=$uid,gid=$gid \
     --entrypoint /bin/bash \
     --security-opt seccomp=unconfined \
     --cap-add=SYS_PTRACE \
     --cap-add=NET_ADMIN \
-    --volume "$VOLUME_PATH":/home/courses \
-    --workdir /home/courses \
+    --volume "$VOLUME_PATH":/courses \
+    --workdir "${CONTAINER_WORKDIR:-/courses}" \
+    --env DIRENV_CONFIG=/root/.config/direnv \
     $sshenvarg \
     $netarg \
     $x11arg $x11envarg \
