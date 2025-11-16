@@ -26,6 +26,8 @@ elif [[ -f "$SYSTEM_BIN_DIR/ccc" ]] || [[ -d "$SYSTEM_SHARE_DIR" ]]; then
     SHARE_DIR="$SYSTEM_SHARE_DIR"
 else
     INSTALL_MODE="unknown"
+    BIN_DIR=""
+    SHARE_DIR=""
 fi
 
 MAIN_SCRIPT="$BIN_DIR/ccc"
@@ -104,7 +106,7 @@ remove_files() {
     if [[ "$INSTALL_MODE" == "user" ]] && [[ -f "$HOME/.config/ccc/config" ]]; then
         # Read courses directory from config
         source "$HOME/.config/ccc/config" 2>/dev/null || true
-        courses_dir="$COURSES_DIR"
+        courses_dir="${COURSES_DIR:-}"
 
         # Ask user about courses directory
         if [[ -n "$courses_dir" ]] && [[ -d "$courses_dir" ]]; then
@@ -121,8 +123,9 @@ remove_files() {
             fi
         fi
 
-        # Remove configuration
+        # Remove configuration files
         rm -f "$HOME/.config/ccc/config"
+        rm -f "$HOME/.config/ccc/settings"
         # Remove directory if empty
         rmdir "$HOME/.config/ccc" 2>/dev/null || true
         log_success "Removed CCC configuration"
