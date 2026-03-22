@@ -185,6 +185,9 @@ host_main() {
   # For all other commands, check that environment is set up
   init
 
+  # Check for updates (cached, only once per day)
+  check_and_prompt_updates
+
   # ccc setup <course> - validate then delegate to container
   if [[ "$#" -eq 2 && ("$1" == "setup" || "$1" == "s") ]]; then
     local course="$2"

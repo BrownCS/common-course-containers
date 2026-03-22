@@ -253,6 +253,245 @@ EOF
   fi
 }
 
+# Cached update checking
+get_cache_dir() {
+  echo "$(get_config_dir)/cache"
+}
+
+get_last_update_check_file() {
+  echo "$(get_cache_dir)/last_update_check"
+}
+
+get_pending_updates_file() {
+  echo "$(get_cache_dir)/pending_updates"
+}
+
+# Check if we should check for updates (once per day)
+should_check_updates() {
+  local last_check_file="$(get_last_update_check_file)"
+  local cache_dir="$(get_cache_dir)"
+
+  # Ensure cache directory exists
+  mkdir -p "$cache_dir"
+
+  if [[ ! -f "$last_check_file" ]]; then
+    return 0  # Never checked, should check
+  fi
+
+  local last_check=$(cat "$last_check_file" 2>/dev/null || echo "0")
+  local current_time=$(date +%s)
+  local day_in_seconds=86400
+
+  # Check if more than 24 hours have passed
+  if (( current_time - last_check > day_in_seconds )); then
+    return 0  # Should check
+  else
+    return 1  # Too recent, skip check
+  fi
+}
+
+# Update the last check timestamp
+update_last_check_time() {
+  local last_check_file="$(get_last_update_check_file)"
+  local cache_dir="$(get_cache_dir)"
+  mkdir -p "$cache_dir"
+  date +%s > "$last_check_file"
+}
+
+# Check for CCC updates and cache result
+check_ccc_updates_cached() {
+  local current_version="$(get_version)"
+  local latest_version="$(get_latest_version 2>/dev/null)"
+
+  if [[ -z "$latest_version" ]]; then
+    return 1  # Network error, don't cache anything
+  fi
+
+  local pending_file="$(get_pending_updates_file)"
+  local cache_dir="$(get_cache_dir)"
+  mkdir -p "$cache_dir"
+
+  # Clear any existing CCC update from cache
+  if [[ -f "$pending_file" ]]; then
+    grep -v "^ccc:" "$pending_file" > "${pending_file}.tmp" 2>/dev/null || true
+    mv "${pending_file}.tmp" "$pending_file" 2>/dev/null || true
+  fi
+
+  # Check if update is available
+  if ! version_compare "$current_version" "$latest_version"; then
+    echo "ccc:$current_version:$latest_version" >> "$pending_file"
+    return 0  # Update available
+  fi
+
+  return 1  # No update
+}
+
+# Check for course updates and cache results
+check_course_updates_cached() {
+  local courses_dir
+  if ! courses_dir="$(get_base_dir 2>/dev/null)"; then
+    return 1  # No courses directory configured
+  fi
+
+  local pending_file="$(get_pending_updates_file)"
+  local cache_dir="$(get_cache_dir)"
+  mkdir -p "$cache_dir"
+
+  # Clear any existing course updates from cache
+  if [[ -f "$pending_file" ]]; then
+    grep -v "^course:" "$pending_file" > "${pending_file}.tmp" 2>/dev/null || true
+    mv "${pending_file}.tmp" "$pending_file" 2>/dev/null || true
+  fi
+
+  local has_updates=false
+
+  for dirpath in "$courses_dir"/*; do
+    if [[ ! -d "$dirpath/.git" ]]; then
+      continue  # Not a git repository
+    fi
+
+    local course_name=$(basename "$dirpath")
+
+    # Fetch updates silently in background
+    if git -C "$dirpath" fetch --quiet 2>/dev/null; then
+      # Check if there are commits ahead
+      local ahead_count=$(git -C "$dirpath" rev-list --count HEAD..@{upstream} 2>/dev/null || echo "0")
+      if [[ "$ahead_count" -gt 0 ]]; then
+        echo "course:$course_name:$ahead_count" >> "$pending_file"
+        has_updates=true
+      fi
+    fi
+  done
+
+  if [[ "$has_updates" == "true" ]]; then
+    return 0  # Updates available
+  else
+    return 1  # No updates
+  fi
+}
+
+# Get cached pending updates
+get_pending_updates() {
+  local pending_file="$(get_pending_updates_file)"
+  if [[ -f "$pending_file" ]] && [[ -s "$pending_file" ]]; then
+    cat "$pending_file"
+  fi
+}
+
+# Prompt for yes/no with default to No
+prompt_yes_no() {
+  local message="$1"
+  local response
+
+  echo -n "$message [y/N]: "
+  read -r response
+
+  case "$response" in
+    [Yy]|[Yy][Ee][Ss])
+      return 0  # Yes
+      ;;
+    *)
+      return 1  # No (default)
+      ;;
+  esac
+}
+
+# Check for updates and prompt user if any are found
+check_and_prompt_updates() {
+  # Only check if enough time has passed
+  if ! should_check_updates; then
+    # Still show any cached pending updates
+    local pending_updates="$(get_pending_updates)"
+    if [[ -n "$pending_updates" ]]; then
+      show_pending_updates "$pending_updates"
+    fi
+    return
+  fi
+
+  # Perform update checks
+  local has_updates=false
+
+  if check_ccc_updates_cached; then
+    has_updates=true
+  fi
+
+  if check_course_updates_cached; then
+    has_updates=true
+  fi
+
+  # Update timestamp
+  update_last_check_time
+
+  # Show any pending updates
+  if [[ "$has_updates" == "true" ]]; then
+    local pending_updates="$(get_pending_updates)"
+    if [[ -n "$pending_updates" ]]; then
+      show_pending_updates "$pending_updates"
+    fi
+  fi
+}
+
+# Show pending updates and prompt for action
+show_pending_updates() {
+  local pending_updates="$1"
+  local ccc_update=""
+  local course_updates=""
+
+  echo ""
+  echo -e "${YELLOW}Updates available:${RESET}"
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^ccc:(.+):(.+)$ ]]; then
+      ccc_update="$line"
+      local current="${BASH_REMATCH[1]}"
+      local latest="${BASH_REMATCH[2]}"
+      echo "  • CCC tool: $current → $latest"
+    elif [[ "$line" =~ ^course:(.+):(.+)$ ]]; then
+      course_updates+="$line"$'\n'
+      local course="${BASH_REMATCH[1]}"
+      local count="${BASH_REMATCH[2]}"
+      echo "  • Course $course: $count commit(s) behind"
+    fi
+  done <<< "$pending_updates"
+
+  echo ""
+
+  # Prompt for CCC update
+  if [[ -n "$ccc_update" ]]; then
+    if prompt_yes_no "Update CCC tool now?"; then
+      update_self
+      # Clear the CCC update from cache after successful update
+      local pending_file="$(get_pending_updates_file)"
+      if [[ -f "$pending_file" ]]; then
+        grep -v "^ccc:" "$pending_file" > "${pending_file}.tmp" 2>/dev/null || true
+        mv "${pending_file}.tmp" "$pending_file" 2>/dev/null || true
+      fi
+    fi
+  fi
+
+  # Prompt for course updates
+  if [[ -n "$course_updates" ]]; then
+    if prompt_yes_no "Update all courses now?"; then
+      while IFS= read -r line; do
+        if [[ "$line" =~ ^course:(.+):(.+)$ ]]; then
+          local course="${BASH_REMATCH[1]}"
+          echo "Updating course: $course"
+          upgrade_course "$course"
+        fi
+      done <<< "$course_updates"
+
+      # Clear course updates from cache after successful update
+      local pending_file="$(get_pending_updates_file)"
+      if [[ -f "$pending_file" ]]; then
+        grep -v "^course:" "$pending_file" > "${pending_file}.tmp" 2>/dev/null || true
+        mv "${pending_file}.tmp" "$pending_file" 2>/dev/null || true
+      fi
+    fi
+  fi
+
+  echo ""
+}
+
 # Auto-load settings when utils is sourced (host mode only)
 if ! is_ccc_container; then
   load_settings
