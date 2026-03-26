@@ -177,7 +177,7 @@ host_main() {
   # For all other commands, check that environment is set up
   init
 
-  # ccc setup <course> - validate then delegate to container
+  # ccc setup <course> - clone on host, then enter persistent container and run setup.sh
   if [[ "$#" -eq 2 && ("$1" == "setup" || "$1" == "s") ]]; then
     local course="$2"
     # Validate course exists in registry (allow default even with empty URL)
@@ -186,7 +186,10 @@ host_main() {
       list_available_courses
       exit 1
     fi
-    delegate_to_container "setup" "$course"
+    # Clone/update course repo on host
+    clone_course "$course" "$VOLUME_PATH"
+    # Create/start persistent container and run setup.sh inside it
+    setup_and_enter_course "$course"
     exit 0
   fi
 
@@ -196,16 +199,15 @@ host_main() {
     exit 0
   fi
 
-  # ccc update <course> - validate then delegate to container
+  # ccc update <course> - pull latest changes on host
   if [[ "$#" -eq 2 && "$1" == "update" ]]; then
     local course="$2"
-    # Validate course exists in registry
     if ! get_course_url "$course" >/dev/null 2>&1; then
       log_error "Course '$course' not found in registry"
       list_available_courses
       exit 1
     fi
-    delegate_to_container "update" "$course"
+    upgrade_course "$course"
     exit 0
   fi
 

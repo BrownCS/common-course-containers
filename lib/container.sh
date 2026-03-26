@@ -180,77 +180,67 @@ container_is_running() {
 }
 
 start_new_container() {
-  netarg=
-  # TODO: add port mappings if needed
-  # add_port_if_open 6169 # 300
-  # add_port_if_open 12949 # 300
-  # add_port_if_open 9269 # 1680
+  # Take an optional command to run before dropping to interactive bash
+  local startup_cmd="${1:-}"
 
-  # SSH agent forwarding (macOS only)
-  ssharg=
-  sshenvarg=
-  if test -n "$SSH_AUTH_SOCK" -a "$(uname)" = Darwin; then
-    ssharg=" -v /run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock"
-    sshenvarg=" -e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock"
-  fi
-
-  # X11 forwarding setup
-  x11arg=
-  x11envarg=
-  if test "$(uname)" = Linux; then
-    if grep -qi Microsoft /proc/version; then # Windows
-      x11arg=""
-      x11envarg="-e DISPLAY=host.docker.internal:0"
-    else # Native Linux
-      if test -n "$DISPLAY"; then
-        x11arg="-v /tmp/.X11-unix:/tmp/.X11-unix"
-        x11envarg="-e DISPLAY=unix$DISPLAY"
-      else
-        echo "$DISPLAY is not set, skipping X11 configuration"
-      fi
-    fi
-  elif test "$(uname)" = Darwin; then # Mac OS
-    x11arg=""
-    x11envarg="-e DISPLAY=host.docker.internal:0"
-  fi
-
-  # Add any necessary xhost configs
   setup_xhost
-
-  # Create network if it doesn't exist
   create_network
 
-  # Set up user
   local user="$(id -un)"
   local group="$(id -gn)"
   local uid="$(id -u)"
   local gid="$(id -g)"
 
-  # Create the container
+  local run_args=(
+    "$CONTAINER_RUNTIME" run
+    --interactive
+    --tty
+    --name "$CONTAINER_NAME"
+    --hostname "$CONTAINER_NAME"
+    --platform "$PLATFORM"
+    --network "${NETWORK_NAME}"
+    --privileged
+    --passwd
+    --group-entry "$group::$gid:$user"
+    --passwd-entry "$user::$uid:$gid:Default User:/home/$user:/bin/bash"
+    --userns "keep-id:uid=$uid,gid=$gid"
+    --entrypoint /bin/bash
+    --security-opt seccomp=unconfined
+    --cap-add=SYS_PTRACE
+    --cap-add=NET_ADMIN
+    --volume "$VOLUME_PATH":/courses
+    --workdir "${CONTAINER_WORKDIR:-/courses}"
+    --env DIRENV_CONFIG=/root/.config/direnv
+  )
+
+  # SSH agent forwarding (macOS only)
+  if [[ -n "${SSH_AUTH_SOCK:-}" ]] && [[ "$(uname)" == "Darwin" ]]; then
+    run_args+=(-v /run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock)
+    run_args+=(-e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock)
+  fi
+
+  # X11 forwarding
+  if [[ "$(uname)" == "Linux" ]]; then
+    if grep -qi Microsoft /proc/version 2>/dev/null; then
+      run_args+=(-e DISPLAY=host.docker.internal:0)
+    elif [[ -n "${DISPLAY:-}" ]]; then
+      run_args+=(-v /tmp/.X11-unix:/tmp/.X11-unix)
+      run_args+=(-e "DISPLAY=unix$DISPLAY")
+    else
+      echo "\$DISPLAY is not set, skipping X11 configuration"
+    fi
+  elif [[ "$(uname)" == "Darwin" ]]; then
+    run_args+=(-e DISPLAY=host.docker.internal:0)
+  fi
+
+  run_args+=("$IMAGE_NAME")
+
+  if [[ -n "$startup_cmd" ]]; then
+    run_args+=(-c "$startup_cmd; exec bash")
+  fi
+
   echo "Creating and starting container '$CONTAINER_NAME'..."
-  echo_and_run "$CONTAINER_RUNTIME" run \
-    --interactive \
-    --tty \
-    --name "$CONTAINER_NAME" \
-    --hostname "$CONTAINER_NAME" \
-    --platform "$PLATFORM" \
-    --network "${NETWORK_NAME}" \
-    --privileged \
-    --passwd \
-    --group-entry "$group::$gid:$user" \
-    --passwd-entry "$user::$uid:$gid:Default User:/home/$user:/bin/bash" \
-    --userns keep-id:uid=$uid,gid=$gid \
-    --entrypoint /bin/bash \
-    --security-opt seccomp=unconfined \
-    --cap-add=SYS_PTRACE \
-    --cap-add=NET_ADMIN \
-    --volume "$VOLUME_PATH":/courses \
-    --workdir "${CONTAINER_WORKDIR:-/courses}" \
-    --env DIRENV_CONFIG=/root/.config/direnv \
-    $sshenvarg \
-    $netarg \
-    $x11arg $x11envarg \
-    "$IMAGE_NAME"
+  echo_and_run "${run_args[@]}"
 
   if [[ $? -ne 0 ]]; then exit 1; fi
 }

@@ -64,67 +64,57 @@ has_image() {
   "$CONTAINER_RUNTIME" image exists "$image_name" &>/dev/null
 }
 
-# Execute commands inside container
-delegate_to_container() {
-  # TODO: This function has error handling issues that need to be addressed:
-  # 1. Error messages from container scripts can get swallowed or not displayed properly
-  # 2. Exit codes are captured but stdout/stderr buffering can hide error messages
-  # 3. The --interactive --tty flags were added to help but may cause issues in non-interactive environments
-  # 4. Consider redesigning to have better error propagation or move more validation to host
-  #
-  # TODO: MAYBE ADD PERSISTANT CONTAINERS. BUT WOULD THIS BE TOO MUCH?
-  local command="$1"
+# Create or enter a persistent container and run setup.sh if present.
+# Cloning is done on the host before calling this (see clone_course).
+setup_and_enter_course() {
+  local course="$1"
+  local container_name
+  local image_name
+  container_name="$(get_container_name "$course")"
+  image_name="$(get_image_name "$course")"
 
-  shift
-  local args="$@"
-
-  # Extract course for course-specific commands
-  local course=""
-  if [[ "$command" == "setup" || "$command" == "s" ]] && [[ -n "$1" ]]; then
-    course="$1"
+  local course_workdir="$CCC_MOUNT_PATH"
+  if [[ "$course" != "default" ]]; then
+    course_workdir="$CCC_MOUNT_PATH/$course"
   fi
 
-  local image_name="$(get_image_name "$course")"
-
-  # Debug logging
-  log_info "course='$course'"
-  log_info "image_name='$image_name'"
-  log_info "CCC_IMAGE_PREFIX='${CCC_IMAGE_PREFIX:-UNSET}'"
-  log_info "IMAGE_NAME='${IMAGE_NAME:-UNSET}'"
-
-  # Ensure network and image exist
-  create_network
+  check_container_runtime
+  log_info "Setting up course: $course"
+  show_container_status_for_course "$course"
   build_image_for_course "$course"
 
-  # Debug the container run command
-  log_info "About to run container with image: '$image_name'"
-  log_info "Full command args: $command $args"
-  log_info "CONTAINER_RUNTIME: $CONTAINER_RUNTIME"
-  log_info "PLATFORM: $PLATFORM"
-  log_info "NETWORK_NAME: $NETWORK_NAME"
+  local setup_cmd=""
+  if [[ "$course" != "default" ]] && [[ -f "$VOLUME_PATH/$course/setup.sh" ]]; then
+    setup_cmd="cd '$course_workdir' && sudo apt-get update -y && sudo bash setup.sh"
+  fi
 
-  # Run command in temporary container with proper user setup
-  "$CONTAINER_RUNTIME" run --rm \
-    --interactive \
-    --tty \
-    --userns keep-id:uid=$(id -u),gid=$(id -g) \
-    --platform "$PLATFORM" \
-    --network "${NETWORK_NAME}" \
-    --privileged \
-    --volume "$VOLUME_PATH":"$CCC_MOUNT_PATH" \
-    --workdir "$CCC_MOUNT_PATH" \
-    --env CCC_COURSES_BASE_DIR="$CCC_MOUNT_PATH" \
-    --env DIRENV_CONFIG=/root/.config/direnv \
-    --env CCC_IMAGE_PREFIX="$CCC_IMAGE_PREFIX" \
-    --env CCC_NETWORK_NAME="$CCC_NETWORK_NAME" \
-    --env CCC_DEFAULT_BASE_IMAGE="$CCC_DEFAULT_BASE_IMAGE" \
-    --env CCC_MOUNT_PATH="$CCC_MOUNT_PATH" \
-    --env CCC_UPDATE_REPO="$CCC_UPDATE_REPO" \
-    "$image_name" \
-    ccc $([ "$VERBOSE" = "true" ] && echo "--verbose") "$command" $args
-  local exit_code=$?
-  if [[ $exit_code -ne 0 ]]; then
-    exit $exit_code
+  if has_container "$course"; then
+    local status
+    status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$container_name")
+    if [[ "$status" != "running" ]]; then
+      echo "Starting container '$container_name'..."
+      "$CONTAINER_RUNTIME" start "$container_name"
+    fi
+
+    if [[ -n "$setup_cmd" ]]; then
+      echo "Running setup in container..."
+      echo_and_run "$CONTAINER_RUNTIME" exec -it "$container_name" \
+        bash -c "$setup_cmd; exec bash"
+    else
+      echo_and_run "$CONTAINER_RUNTIME" exec -it "$container_name" \
+        bash -c "cd '$course_workdir' && exec bash"
+    fi
+  else
+    local orig_container_name="$CONTAINER_NAME"
+    local orig_image_name="$IMAGE_NAME"
+    CONTAINER_NAME="$container_name"
+    IMAGE_NAME="$image_name"
+    CONTAINER_WORKDIR="$course_workdir"
+
+    start_new_container "$setup_cmd"
+
+    CONTAINER_NAME="$orig_container_name"
+    IMAGE_NAME="$orig_image_name"
   fi
 }
 

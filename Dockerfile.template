@@ -7,27 +7,26 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set up environment
 ENV TZ=America/New_York
 
-# Set up locale (works for both Ubuntu and Debian)
 RUN apt-get update && \
-    apt-get install -y locales && \
+    apt-get install -y \
+      locales \
+      direnv \
+      bsdmainutils \
+      sudo \
+      git \
+      nano \
+      vim \
+      neovim \
+      wget \
+      curl \
+      xxd \
+      jq && \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
-    locale-gen
+    locale-gen && \
+    rm -rf /var/lib/apt/lists/*
+
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
-
-# Install packages (Ubuntu/Debian only)
-RUN apt-get install -y \
-  direnv \
-  bsdmainutils \
-  sudo \
-  git \
-  nano \
-  vim \
-  neovim \
-  wget \
-  curl \
-  xxd \
-  jq
 
 # Allow any user to sudo
 RUN echo "ALL ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers

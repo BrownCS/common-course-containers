@@ -93,6 +93,38 @@ get_git_commit() {
   git -C "$dirpath" rev-parse HEAD 2>/dev/null
 }
 
+clone_course() {
+  local course="$1"
+  local courses_dir="$2"
+
+  if [[ "$course" == "default" ]]; then
+    return 0
+  fi
+
+  local course_url
+  course_url="$(get_course_url "$course")"
+
+  if [[ -z "$course_url" ]]; then
+    log_error "Could not find repository URL for '$course'"
+    list_available_courses
+    return 1
+  fi
+
+  local dirpath="$courses_dir/$course"
+
+  if [[ ! -d "$dirpath" ]]; then
+    echo "Cloning course repository..."
+    echo_and_run git clone "$course_url" "$dirpath"
+  else
+    echo "Course directory already exists: $dirpath"
+    echo "Updating repository..."
+    echo_and_run git -C "$dirpath" pull
+  fi
+
+  add_course_context "$course" "$dirpath"
+}
+
+# Clone repo outside of the container and run setup.sh inside the container
 setup_course() {
   local course="$1"
 
@@ -151,8 +183,9 @@ setup_course() {
     return 0
   fi
 
-  echo_and_run chmod +x $script
-  echo_and_run bash yes | $script
+  echo_and_run sudo apt-get update -y
+  echo_and_run chmod +x "$script"
+  yes | sudo bash "$script"
 
   # Add course context information to .envrc
   add_course_context "$course" "$dirpath"
