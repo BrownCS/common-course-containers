@@ -136,22 +136,6 @@ remove_containers() {
   fi
 }
 
-show_container_status() {
-  echo "Image: $IMAGE_NAME"
-  echo "Container: $CONTAINER_NAME"
-  echo "Volume: $VOLUME_PATH"
-  echo "Network: $NETWORK_NAME"
-  echo "Arch: $ARCH"
-  echo "Runtime: $CONTAINER_RUNTIME"
-  echo ""
-
-  echo "Has runtime? $(command -v "$CONTAINER_RUNTIME" >/dev/null && echo YES || echo_error NO)"
-  echo "Built image? $(has_image && echo YES || echo_error NO)"
-  echo "Set up container? $(has_container && echo YES || echo_error NO)"
-  echo "Created network? $(has_network && echo YES || echo_error NO)"
-  echo ""
-}
-
 # X11 forwarding setup
 do_xhost() {
   if command -v xhost >/dev/null 2>&1; then
@@ -171,12 +155,6 @@ setup_xhost() {
   elif [[ "$(uname)" == "Darwin" ]]; then
     do_xhost +localhost
   fi
-}
-
-container_is_running() {
-  local container_name="$1"
-  local status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$container_name" 2>/dev/null || echo "missing")
-  [[ "$status" == "running" ]]
 }
 
 start_new_container() {
@@ -245,27 +223,4 @@ start_new_container() {
 
   echo "Creating and starting container '$CONTAINER_NAME'..."
   echo_and_run "${run_args[@]}"
-}
-
-start_container() {
-  STATUS=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$CONTAINER_NAME")
-  if [[ "$STATUS" == "running" ]]; then
-    echo "Container '$CONTAINER_NAME' is already running. Attaching..."
-    echo_and_run "$CONTAINER_RUNTIME" exec -it "$CONTAINER_NAME" bash
-  else
-    echo "Container '$CONTAINER_NAME' exists but is not running. Starting..."
-    echo_and_run "$CONTAINER_RUNTIME" start -ai "$CONTAINER_NAME"
-  fi
-}
-
-run_container() {
-  if ! [[ -d courses ]]; then
-    mkdir courses
-  fi
-
-  if has_container; then
-    start_container
-  else
-    start_new_container
-  fi
 }

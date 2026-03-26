@@ -157,18 +157,15 @@ setup_course() {
     exit 1
   fi
 
-  # Clone the repository (skip if already exists)
   if [[ ! -d "$dirpath" ]]; then
     echo_and_run git clone "$course_url" "$dirpath"
   else
-    echo "Course directory already exists: $dirpath"
-    echo "Updating repository..."
-    echo_and_run cd "$dirpath" && git pull
+    echo "Course directory already exists, updating..."
+    echo_and_run git -C "$dirpath" pull
   fi
 
   cd "$dirpath"
 
-  # Run the setup script
   if [[ ! -f "$script" ]]; then
     echo_error "WARNING: No setup.sh found in $dirpath"
     echo "         Check with course staff if there should be a setup script for the course"
@@ -185,77 +182,34 @@ setup_course() {
 }
 
 list_courses() {
-  local tmp=$(mktemp)
+  local tmp courses_dir dirpath course_url course commit
+  tmp=$(mktemp)
   echo "BASENAME,COURSE,COURSE_REPO,COMMIT" >"$tmp"
 
-  local courses_dir="$(get_base_dir)"
-  log_info "Checking courses in: $courses_dir"
+  courses_dir="$(get_base_dir)"
 
-  for dirpath in "$courses_dir"/*; do
-    # Check that dirpath is a directory
-    if [[ ! -d "$dirpath" ]]; then
-      log_info "Skipping non-directory: $dirpath"
-      continue
-    fi
-
-    log_info "Processing directory: $dirpath"
-
-    # Get the course_url
-    local course_url
-    course_url="$(get_git_url "$dirpath")"
-    if [[ "$?" -ne 0 ]]; then
-      log_info "Failed to get git URL for: $dirpath"
-      continue
-    fi
-    log_info "Found git URL: $course_url"
-
-    # Find the course
-    local course
-    course="$(find_course "$course_url")"
-    if [[ "$?" -ne 0 ]]; then
-      log_info "Failed to find course for URL: $course_url"
-      continue
-    fi
-    log_info "Found course: $course"
-
-    # Get the commit
-    local commit
-    commit="$(get_git_commit "$dirpath")"
-    if [[ "$?" -ne 0 ]]; then
-      log_info "Failed to get git commit for: $dirpath"
-      continue
-    fi
-    log_info "Found commit: $commit"
-
-    local basename="$(basename "$dirpath")"
-    log_info "Adding to list: $basename,$course,$course_url,$commit"
-
-    echo "$basename,$course,$course_url,$commit" >>"$tmp"
+  for dirpath in "$courses_dir"/*/; do
+    [[ ! -d "$dirpath" ]] && continue
+    course_url="$(get_git_url "$dirpath")" || continue
+    course="$(find_course "$course_url")" || continue
+    commit="$(get_git_commit "$dirpath")" || continue
+    echo "$(basename "$dirpath"),$course,$course_url,$commit" >>"$tmp"
   done
 
   column -s, -t <"$tmp"
+  rm -f "$tmp"
 }
 
 upgrade_course() {
-  local basename="$1"
-  local courses_dir="$(get_base_dir)"
-  local dirpath="$courses_dir/$basename"
-
-  if [[ ! -d "$dirpath" ]]; then
-    echo_error "ERROR: '$dirpath' does not exist"
-    echo "       Is '$basename' the right directory name?"
-    return 1
-  fi
+  local course="$1"
+  local dirpath="$(get_base_dir)/$course"
 
   if [[ ! -d "$dirpath/.git" ]]; then
-    echo_error "ERROR: $dirpath is not a git repo"
+    log_error "'$dirpath' is not a git repository"
     return 1
   fi
 
-  echo_and_run cd "$dirpath"
-  echo_and_run git pull
-
-  # TODO: handle merge conflicts in some way?
+  echo_and_run git -C "$dirpath" pull
 }
 
 handle_container_switching() {
