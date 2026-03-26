@@ -16,14 +16,12 @@ if [[ -f "$SCRIPT_DIR/lib/container.sh" ]]; then
 else
     # Fallback container runtime detection
     detect_container_runtime() {
-        if command -v podman >/dev/null 2>&1; then
-            echo "podman"
-        elif command -v docker >/dev/null 2>&1; then
-            echo "docker"
-        else
-            log_error "No container runtime found (podman/docker)"
-            return 1
-        fi
+    if command -v podman >/dev/null 2>&1; then
+        echo "podman"
+    else
+        log_error "Please install podman to use CCC: https://podman.io"
+        exit 1
+    fi
     }
 fi
 

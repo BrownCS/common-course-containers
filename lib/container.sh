@@ -7,10 +7,8 @@ set -euo pipefail
 detect_container_runtime() {
   if command -v podman >/dev/null 2>&1; then
     echo "podman"
-  elif command -v docker >/dev/null 2>&1; then
-    echo "docker"
   else
-    log_error "No container runtime found. Please install podman: https://podman.io"
+    log_error "Please install podman to use CCC: https://podman.io"
     exit 1
   fi
 }
@@ -203,10 +201,6 @@ start_new_container() {
     --platform "$PLATFORM"
     --network "${NETWORK_NAME}"
     --privileged
-    --passwd
-    --group-entry "$group::$gid:$user"
-    --passwd-entry "$user::$uid:$gid:Default User:/home/$user:/bin/bash"
-    --userns "keep-id:uid=$uid,gid=$gid"
     --entrypoint /bin/bash
     --security-opt seccomp=unconfined
     --cap-add=SYS_PTRACE
@@ -216,10 +210,18 @@ start_new_container() {
     --env DIRENV_CONFIG=/root/.config/direnv
   )
 
-  # SSH agent forwarding (macOS only)
-  if [[ -n "${SSH_AUTH_SOCK:-}" ]] && [[ "$(uname)" == "Darwin" ]]; then
-    run_args+=(-v /run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock)
-    run_args+=(-e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock)
+  run_args+=(
+    --passwd
+    --group-entry "$group::$gid:$user"
+    --passwd-entry "$user::$uid:$gid:Default User:/home/$user:/bin/bash"
+    --userns "keep-id:uid=$uid,gid=$gid"
+  )
+
+  # SSH agent forwarding (macOS Docker only)
+  local ssh_sock="/run/host-services/ssh-auth.sock"
+  if [[ -n "${SSH_AUTH_SOCK:-}" ]] && [[ "$(uname)" == "Darwin" ]] && [[ -e "$ssh_sock" ]]; then
+    run_args+=(-v "$ssh_sock:$ssh_sock")
+    run_args+=(-e "SSH_AUTH_SOCK=$ssh_sock")
   fi
 
   # X11 forwarding
