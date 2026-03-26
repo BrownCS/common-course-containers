@@ -5,9 +5,12 @@ set -euo pipefail
 
 # Runtime detection 
 detect_container_runtime() {
-  local runtime="podman"
-  if ! command -v podman >/dev/null 2>&1; then
-    log_error "ccc requires podman to be installed"
+  if command -v podman >/dev/null 2>&1; then
+    echo "podman"
+  elif command -v docker >/dev/null 2>&1; then
+    echo "docker"
+  else
+    log_error "No container runtime found. Please install podman: https://podman.io"
     exit 1
   fi
 }
@@ -126,8 +129,8 @@ remove_containers() {
   local _name="${1:-${CONTAINER_NAME}}"
   echo "Removing all existing '$CONTAINER_NAME' containers..."
   # Also remove any course-specific containers (ccc-* pattern)
-  "$CONTAINER_RUNTIME" ps -a -f name=ccc --format "{{.ID}}" | while read line; do
-    echo_and_run "$CONTAINER_RUNTIME" rm --force $line
+  "$CONTAINER_RUNTIME" ps -a -f name=ccc --format "{{.ID}}" | while read -r line; do
+    [[ -n "$line" ]] && echo_and_run "$CONTAINER_RUNTIME" rm --force "$line"
   done
 }
 
