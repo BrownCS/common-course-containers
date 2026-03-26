@@ -217,6 +217,11 @@ host_main() {
     exit 0
   fi
 
+  # No command given — show help
+  if [[ "$#" -eq 0 ]]; then
+    usage
+  fi
+
   # Container commands (load container library when needed)
   if [[ "$1" == "build" || "$1" == "run" || "$1" == "clean" || "$1" == "status" ]]; then
     source_lib "container"
