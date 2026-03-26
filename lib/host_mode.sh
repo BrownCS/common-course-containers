@@ -222,10 +222,7 @@ host_main() {
     usage
   fi
 
-  # Container commands (load container library when needed)
-  if [[ "$1" == "build" || "$1" == "run" || "$1" == "clean" || "$1" == "status" ]]; then
-    source_lib "container"
-  fi
+  # Container commands
 
   if [[ "$#" -eq 1 && "$1" == "build" ]]; then
     check_container_runtime

@@ -124,12 +124,16 @@ remove_image() {
 }
 
 remove_containers() {
-  local _name="${1:-${CONTAINER_NAME}}"
   echo "Removing all existing '$CONTAINER_NAME' containers..."
-  # Also remove any course-specific containers (ccc-* pattern)
-  "$CONTAINER_RUNTIME" ps -a -f name=ccc --format "{{.ID}}" | while read -r line; do
-    [[ -n "$line" ]] && echo_and_run "$CONTAINER_RUNTIME" rm --force "$line"
-  done
+  local ids
+  ids=$("$CONTAINER_RUNTIME" ps -a -f name=ccc --format "{{.ID}}" 2>/dev/null) || true
+  if [[ -n "$ids" ]]; then
+    while read -r line; do
+      [[ -n "$line" ]] && echo_and_run "$CONTAINER_RUNTIME" rm --force "$line"
+    done <<< "$ids"
+  else
+    echo "No containers found."
+  fi
 }
 
 show_container_status() {
@@ -150,26 +154,21 @@ show_container_status() {
 
 # X11 forwarding setup
 do_xhost() {
-  if $(which xhost); then
-    xhost $@
+  if command -v xhost >/dev/null 2>&1; then
+    xhost "$@"
   else
     echo "Warning: xhost was not detected on your system. You may have issues running graphical apps like QEMU or Wireshark."
   fi
 }
 
 setup_xhost() {
-  if test "$(uname)" = Linux; then
-    if grep -qi Microsoft /proc/version; then # Windows
-      true                                    # Nothing to do, configured in GUI outside WSL
-    else                                      # Native Linux
-      if test -n "$DISPLAY"; then
-        do_xhost +local:
-      else
-        # Don't bother doing anything if $DISPLAY isn't set--this might be a headless system
-        echo "$DISPLAY is not set, skipping X11 configuration"
-      fi
+  if [[ "$(uname)" == "Linux" ]]; then
+    if grep -qi Microsoft /proc/version 2>/dev/null; then
+      true
+    elif [[ -n "${DISPLAY:-}" ]]; then
+      do_xhost +local:
     fi
-  elif test "$(uname)" = Darwin; then # Mac OS
+  elif [[ "$(uname)" == "Darwin" ]]; then
     do_xhost +localhost
   fi
 }
@@ -246,8 +245,6 @@ start_new_container() {
 
   echo "Creating and starting container '$CONTAINER_NAME'..."
   echo_and_run "${run_args[@]}"
-
-  if [[ $? -ne 0 ]]; then exit 1; fi
 }
 
 start_container() {

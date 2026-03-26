@@ -78,8 +78,8 @@ find_course() {
 
 get_git_url() {
   local dirpath="$1"
-  local url=$(git -C "$dirpath" remote get-url origin 2>/dev/null)
-  if [[ "$?" -ne 0 ]]; then return 1; fi
+  local url
+  url=$(git -C "$dirpath" remote get-url origin 2>/dev/null) || return 1
 
   if [[ "$url" =~ ^git@([^:]+):(.+)$ ]]; then
     echo "https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
@@ -137,20 +137,13 @@ setup_course() {
   fi
 
   local course_url
-  course_url="$(get_course_url "$course")"
+  course_url="$(get_course_url "$course")" || true
 
-  # Use exact course name as directory
   local courses_dir="$(get_base_dir)"
   local dirpath="$courses_dir/$course"
   local script="$dirpath/setup.sh"
 
-  # Find the course_url
-  # TODO: Error messages from setup_course are getting swallowed when run inside container
-  # This should display error for invalid courses but may not be visible due to:
-  # 1. Output buffering in container environment
-  # 2. exit 1 terminating before output is flushed
-  # 3. Potential issues with echo_error function in container context
-  if [[ $? -ne 0 || -z "$course_url" ]]; then
+  if [[ -z "$course_url" ]]; then
     echo_error "ERROR: Could not find remote course repository for '$course'"
     echo "(1) To install a course repository manually, run: "
     echo "       git clone <course-url>"

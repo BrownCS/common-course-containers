@@ -26,48 +26,60 @@ else
 fi
 
 # Detect container runtime
-CONTAINER_RUNTIME=$(detect_container_runtime)
-if [[ $? -ne 0 ]]; then
+CONTAINER_RUNTIME=$(detect_container_runtime) || {
+    log_error "No container runtime found"
     exit 1
-fi
+}
 
 log_info "Using container runtime: $CONTAINER_RUNTIME"
 
 # 1. Stop and remove all CCC containers
 log_info "Stopping and removing all CCC containers..."
-$CONTAINER_RUNTIME ps -a --filter "name=ccc" --format "{{.Names}} {{.ID}}" | while read name id; do
-    if [[ -n "$name" ]]; then
-        echo "  Removing container: $name ($id)"
-        $CONTAINER_RUNTIME stop "$id" 2>/dev/null || true
-        $CONTAINER_RUNTIME rm -f "$id" 2>/dev/null || true
-    fi
-done
+local_ids=$($CONTAINER_RUNTIME ps -a --filter "name=ccc" --format "{{.Names}} {{.ID}}" 2>/dev/null) || true
+if [[ -n "$local_ids" ]]; then
+    while read -r name id; do
+        if [[ -n "$name" ]]; then
+            echo "  Removing container: $name ($id)"
+            $CONTAINER_RUNTIME stop "$id" 2>/dev/null || true
+            $CONTAINER_RUNTIME rm -f "$id" 2>/dev/null || true
+        fi
+    done <<< "$local_ids"
+fi
 
 # Also remove old cs-courses containers if they exist
-$CONTAINER_RUNTIME ps -a --filter "name=cs-courses" --format "{{.Names}} {{.ID}}" | while read name id; do
-    if [[ -n "$name" ]]; then
-        echo "  Removing old container: $name ($id)"
-        $CONTAINER_RUNTIME stop "$id" 2>/dev/null || true
-        $CONTAINER_RUNTIME rm -f "$id" 2>/dev/null || true
-    fi
-done
+local_ids=$($CONTAINER_RUNTIME ps -a --filter "name=cs-courses" --format "{{.Names}} {{.ID}}" 2>/dev/null) || true
+if [[ -n "$local_ids" ]]; then
+    while read -r name id; do
+        if [[ -n "$name" ]]; then
+            echo "  Removing old container: $name ($id)"
+            $CONTAINER_RUNTIME stop "$id" 2>/dev/null || true
+            $CONTAINER_RUNTIME rm -f "$id" 2>/dev/null || true
+        fi
+    done <<< "$local_ids"
+fi
 
 # 2. Remove all CCC images
 log_info "Removing all CCC images..."
-$CONTAINER_RUNTIME images --filter "reference=ccc*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" | while read ref id; do
-    if [[ -n "$ref" ]]; then
-        echo "  Removing image: $ref ($id)"
-        $CONTAINER_RUNTIME rmi -f "$id" 2>/dev/null || true
-    fi
-done
+local_ids=$($CONTAINER_RUNTIME images --filter "reference=ccc*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null) || true
+if [[ -n "$local_ids" ]]; then
+    while read -r ref id; do
+        if [[ -n "$ref" ]]; then
+            echo "  Removing image: $ref ($id)"
+            $CONTAINER_RUNTIME rmi -f "$id" 2>/dev/null || true
+        fi
+    done <<< "$local_ids"
+fi
 
 # Also remove old cs-courses images
-$CONTAINER_RUNTIME images --filter "reference=cs-courses*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" | while read ref id; do
-    if [[ -n "$ref" ]]; then
-        echo "  Removing old image: $ref ($id)"
-        $CONTAINER_RUNTIME rmi -f "$id" 2>/dev/null || true
-    fi
-done
+local_ids=$($CONTAINER_RUNTIME images --filter "reference=cs-courses*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null) || true
+if [[ -n "$local_ids" ]]; then
+    while read -r ref id; do
+        if [[ -n "$ref" ]]; then
+            echo "  Removing old image: $ref ($id)"
+            $CONTAINER_RUNTIME rmi -f "$id" 2>/dev/null || true
+        fi
+    done <<< "$local_ids"
+fi
 
 # 3. Remove CCC networks
 log_info "Removing CCC networks..."
@@ -85,7 +97,7 @@ log_info "Cleaning up CCC configuration and courses..."
 courses_dir=""
 if [[ -f "$HOME/.config/ccc/config" ]]; then
     source "$HOME/.config/ccc/config" 2>/dev/null || true
-    courses_dir="$COURSES_DIR"
+    courses_dir="${COURSES_DIR:-}"
 fi
 
 # Remove courses directory (if configured)
