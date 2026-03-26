@@ -48,14 +48,11 @@ RUN mkdir -p /courses && chmod 755 /courses
 # Create simple CCC container marker
 RUN touch /etc/ccc-container
 
-# Copy ccc, libraries, registry, and apt-sandbox
+# Copy ccc, libraries, and registry
 COPY ccc.sh /usr/local/bin/ccc
 COPY lib/ /usr/local/bin/lib/
 COPY registry.csv /usr/local/bin/registry.csv
-COPY apt-sandbox.sh /usr/local/bin/apt-sandbox
-RUN chmod +x /usr/local/bin/ccc /usr/local/bin/apt-sandbox
-RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt
-RUN ln -s /usr/local/bin/apt-sandbox /usr/local/bin/apt-get
+RUN chmod +x /usr/local/bin/ccc
 
 # Set custom zsh-like prompt as environment variable (works for all bash sessions)
 ENV PS1="\[\033[1;32m\][\u@\h]\[\033[0m\] \[\033[1;34m\]\w\[\033[0m\] "
