@@ -1,11 +1,10 @@
 #!/bin/bash
 set -euo pipefail
-# Container mode functionality (from ccc-container.sh)
 
-# Container-specific settings
+# Container mode utilities
+
 BASE_DIR="${CCC_COURSES_BASE_DIR:-/courses}"
 
-# Container-specific function for compatibility
 get_base_dir() {
   echo "$BASE_DIR"
 }
@@ -18,10 +17,7 @@ CCC_DEFAULT_BASE_IMAGE="${CCC_DEFAULT_BASE_IMAGE:-ubuntu:noble}"
 CCC_MOUNT_PATH="${CCC_MOUNT_PATH:-/courses}"
 CCC_UPDATE_REPO="${CCC_UPDATE_REPO:-BrownCS/common-course-containers}"
 
-# Derive dependent values
 CCC_UPDATE_API_URL="https://api.github.com/repos/$CCC_UPDATE_REPO/releases/latest"
-
-# Registry file location
 REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
 
 # Container initialization

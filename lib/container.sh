@@ -1,24 +1,18 @@
 #!/bin/bash
 set -euo pipefail
-# Container management functions (from run-podman)
 
-# Container runtime detection and setup
+# Container management utilities
+
+# Runtime detection 
 detect_container_runtime() {
   local runtime="podman"
-
   if ! command -v podman >/dev/null 2>&1; then
-    if command -v docker >/dev/null 2>&1; then
-      runtime="docker"
-    else
-      log_error "No container runtime found (podman/docker)"
-      return 1
-    fi
+    log_error "ccc requires podman to be installed"
+    exit 1
   fi
-
-  echo "$runtime"
 }
 
-# Network management
+# Network utilities
 has_network() {
   "$CONTAINER_RUNTIME" network inspect "$NETWORK_NAME" &>/dev/null
 }
@@ -128,7 +122,6 @@ remove_image() {
   echo_and_run "$CONTAINER_RUNTIME" image rm --force "$IMAGE_NAME"
 }
 
-# Container management
 remove_containers() {
   local _name="${1:-${CONTAINER_NAME}}"
   echo "Removing all existing '$CONTAINER_NAME' containers..."
@@ -138,7 +131,6 @@ remove_containers() {
   done
 }
 
-# Container status and info
 show_container_status() {
   echo "Image: $IMAGE_NAME"
   echo "Container: $CONTAINER_NAME"
@@ -181,14 +173,12 @@ setup_xhost() {
   fi
 }
 
-# Container status helpers
 container_is_running() {
   local container_name="$1"
   local status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$container_name" 2>/dev/null || echo "missing")
   [[ "$status" == "running" ]]
 }
 
-# Container lifecycle management
 start_new_container() {
   netarg=
   # TODO: add port mappings if needed

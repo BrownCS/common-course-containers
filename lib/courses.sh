@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-# Shared course and registry management functions
 
-# Unified CSV parsing function
+# Course and registry management utilities
+
 get_course_info() {
   local course="$1"
   local field="${2:-url}"  # url, base_image, name, semester, or all
@@ -33,7 +33,6 @@ get_course_info() {
   return 1
 }
 
-# Simplified registry functions using unified parser
 get_course_url() {
   get_course_info "$1" "url"
 }
@@ -77,7 +76,6 @@ find_course() {
   return 1
 }
 
-# Course utility functions
 get_git_url() {
   local dirpath="$1"
   local url=$(git -C "$dirpath" remote get-url origin 2>/dev/null)
@@ -95,7 +93,6 @@ get_git_commit() {
   git -C "$dirpath" rev-parse HEAD 2>/dev/null
 }
 
-# Course management functions
 setup_course() {
   local course="$1"
 
@@ -234,7 +231,6 @@ upgrade_course() {
 
   # TODO: handle merge conflicts in some way?
 }
-
 
 handle_container_switching() {
   local target_course="$1"

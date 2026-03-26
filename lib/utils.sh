@@ -1,15 +1,15 @@
 #!/bin/bash
 set -euo pipefail
-# Shared utility functions
 
-# Color definitions
+# Logging, mode detection, config, and versioning utilities
+
+# Printing utilities
 RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 BLUE='\033[0;34m'
 RESET='\033[0m'
 
-# Printing utilities
 echo_and_run() {
   echo -e "${BLUE}$*${RESET}"
   "$@"
@@ -20,12 +20,6 @@ echo_error() {
   echo -e "${RED}${text}${RESET}"
 }
 
-# Container detection
-is_ccc_container() {
-  [[ -f /etc/ccc-container ]]
-}
-
-# Logging functions with prefixes
 log_info() {
   if [[ "${VERBOSE:-false}" == "true" ]]; then
     echo -e "${BLUE}[INFO]${RESET} $1"
@@ -42,6 +36,11 @@ log_warning() {
 
 log_error() {
   echo -e "${RED}[ERROR]${RESET} $1" >&2
+}
+
+# Container detection
+is_ccc_container() {
+  [[ -f /etc/ccc-container ]]
 }
 
 # Configuration file management
@@ -87,7 +86,7 @@ has_courses_config() {
   [[ -f "$config_file" ]] && grep -q "^COURSES_DIR=" "$config_file"
 }
 
-# Simple version management
+# Version management
 get_version() {
   local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
   local version_file="$script_dir/VERSION"
@@ -99,7 +98,8 @@ get_version() {
   fi
 }
 
-# Compare two semantic versions (returns 0 if v1 >= v2, 1 if v1 < v2)
+# Compare two semantic versions 
+# returns 0 if v1 >= v2, 1 if v1 < v2
 version_compare() {
   local v1="$1"
   local v2="$2"

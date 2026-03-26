@@ -1,18 +1,16 @@
 #!/bin/bash
 set -euo pipefail
-# Host mode functionality (from ccc-host.sh)
 
-# Global flags
+# Host mode utilities
+
 VERBOSE=false
-
-# Container configuration from settings (loaded automatically in utils.sh)
 IMAGE_NAME="$CCC_IMAGE_PREFIX"
 CONTAINER_NAME="$CCC_IMAGE_PREFIX-default"
 NETWORK_NAME="$CCC_NETWORK_NAME"
+REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
+CONTAINER_RUNTIME="podman"
 
-# Get courses directory from configuration
 get_base_dir() {
-  # Check if explicitly set via environment variable
   if [[ -n "${CCC_COURSES_DIR:-}" ]]; then
     echo "$CCC_COURSES_DIR"
     return
@@ -41,12 +39,6 @@ else
   PLATFORM="linux/amd64"
   CONTAINERFILE_PATH="$SCRIPT_DIR/Dockerfile.amd64"
 fi
-
-# Registry file location
-REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
-
-# Container runtime configuration (will be set after settings are loaded)
-CONTAINER_RUNTIME="podman"
 
 # Host initialization
 init() {

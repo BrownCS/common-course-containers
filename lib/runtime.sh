@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-# Host-specific runtime functions (from ccc-host.sh)
+
+# Runtime utilities
 
 # Container resolution functions
 get_container_name() {

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# CCC Unified Script - Lightweight Environment Detection and Delegation
+# Entry point for the CCC CLI
+# Detects whether we're on the host or in the container
+# and dispatches to either lib/host_mode.sh or lib/container_mode.sh
 
-# Script directory - use installed location when available
+# Script directory
 if [[ -d "$HOME/.local/share/ccc" ]]; then
   SCRIPT_DIR="$HOME/.local/share/ccc"
 elif [[ -d "/usr/local/share/ccc" ]]; then
@@ -12,7 +14,7 @@ else
   SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 fi
 
-# Load library functions
+# Load library
 source_lib() {
   local lib="$1"
   local lib_file="$SCRIPT_DIR/lib/$lib.sh"
@@ -25,17 +27,15 @@ source_lib() {
   fi
 }
 
-# Load core utilities for environment detection
+# Load core utilities
 source_lib "utils"
 
-# Environment detection and delegation
+# Dispatch
 if is_ccc_container; then
-  # Container mode - load container functionality and run
   source_lib "courses"
   source_lib "container_mode"
   container_main "$@"
 else
-  # Host mode - load host functionality and run
   source_lib "courses"
   source_lib "container"
   source_lib "runtime"
