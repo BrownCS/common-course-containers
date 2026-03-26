@@ -5,13 +5,15 @@ set -euo pipefail
 # Detects whether we're on the host or in the container
 # and dispatches to either lib/host_mode.sh or lib/container_mode.sh
 
-# Script directory
-if [[ -d "$HOME/.local/share/ccc" ]]; then
-  SCRIPT_DIR="$HOME/.local/share/ccc"
-elif [[ -d "/usr/local/share/ccc" ]]; then
-  SCRIPT_DIR="/usr/local/share/ccc"
-else
-  SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+# Script directory — use the directory containing this script if it has lib/,
+# otherwise fall back to the installed share directory.
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+if [[ ! -d "$SCRIPT_DIR/lib" ]]; then
+  if [[ -d "$HOME/.local/share/ccc" ]]; then
+    SCRIPT_DIR="$HOME/.local/share/ccc"
+  elif [[ -d "/usr/local/share/ccc" ]]; then
+    SCRIPT_DIR="/usr/local/share/ccc"
+  fi
 fi
 
 # Load library
