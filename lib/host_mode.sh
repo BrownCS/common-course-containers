@@ -232,8 +232,8 @@ host_main() {
     exit 0
   fi
 
-  if [[ "$#" -eq 2 && "$1" == "run" ]]; then
-    local course="$2"
+  if [[ "$#" -ge 1 && "$#" -le 2 && "$1" == "run" ]]; then
+    local course="${2:-default}"
     # Validate course exists in registry (allow default even with empty URL)
     if [[ "$course" != "default" ]] && ! get_course_url "$course" >/dev/null 2>&1; then
       log_error "Course '$course' not found in registry"
