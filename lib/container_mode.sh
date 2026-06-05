@@ -83,6 +83,7 @@ container_main() {
 
   # ccc run <course> - container switching
   if [[ "$#" -eq 2 && "$1" == "run" ]]; then
+  
     handle_container_switching "$2"
     exit 0
   fi

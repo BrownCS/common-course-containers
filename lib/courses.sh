@@ -174,7 +174,7 @@ setup_course() {
   fi
 
   echo_and_run sudo apt-get update -y
-  echo_and_run chmod +x "$script"
+  echo_and_run chmod +x "$script" #isn't this redundant because the bash command isn't doing ./setup.sh
   yes | sudo bash "$script"
 
   # Add course context information to .envrc

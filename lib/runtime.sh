@@ -75,6 +75,7 @@ show_course_status() {
 }
 
 build_course_image() {
+  echo "building course"
   local course="${1:-}"
   local iname
   iname="$(get_image_name "$course")"
@@ -91,6 +92,7 @@ build_course_image() {
 # Enter (or create) a container for a course.
 # Pass --setup to run the course's setup.sh inside the container.
 enter_course() {
+  echo "ENTERING COURSE"
   local course="$1"
   local run_setup=false
   [[ "${2:-}" == "--setup" ]] && run_setup=true
@@ -100,12 +102,12 @@ enter_course() {
   iname="$(get_image_name "$course")"
   course_workdir="$CCC_MOUNT_PATH"
   [[ "$course" != "default" ]] && course_workdir="$CCC_MOUNT_PATH/$course"
-
+  echo "testing log"
   check_container_runtime
   log_info "Course: $course"
   show_course_status "$course"
   build_course_image "$course"
-
+  echo "made it there"
   local startup_cmd=""
   if $run_setup && [[ "$course" != "default" ]] && [[ -f "$VOLUME_PATH/$course/setup.sh" ]]; then
     startup_cmd="cd '$course_workdir' && sudo apt-get update -y && sudo bash setup.sh"

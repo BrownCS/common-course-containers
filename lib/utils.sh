@@ -40,7 +40,7 @@ log_error() {
 
 # Container detection
 is_ccc_container() {
-  [[ -f /etc/ccc-container ]]
+  [[ -f /etc/ccc-container ]] #isn't this Bash? making a note bc was told not to use bash
 }
 
 # Configuration file management
@@ -65,7 +65,7 @@ save_courses_dir() {
   mkdir -p "$config_dir"
 
   # Convert to absolute path
-  courses_dir="$(realpath "$courses_dir")"
+  courses_dir="$(realpath "$courses_dir")" # is realpath available to every system?
 
   # Save to config file
   echo "COURSES_DIR=$courses_dir" >"$config_file"

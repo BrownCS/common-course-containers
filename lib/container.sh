@@ -8,7 +8,7 @@ detect_container_runtime() {
   if command -v podman >/dev/null 2>&1; then
     echo "podman"
   else
-    log_error "Please install podman to use CCC: https://podman.io"
+    log_error "Please install podman to use CCC: https://podman.io" #isn't this also done in install.sh check_dependencies()?
     exit 1
   fi
 }
