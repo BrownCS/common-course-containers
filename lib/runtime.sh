@@ -99,6 +99,7 @@ enter_course() {
   cname="$(get_container_name "$course")"
   iname="$(get_image_name "$course")"
   course_workdir="$CCC_MOUNT_PATH"
+  echo "CCC_MOUNT_PATH=${CCC_MOUNT_PATH:-<unset>}"
   [[ "$course" != "default" ]] && course_workdir="$CCC_MOUNT_PATH/$course"
 
   check_container_runtime
