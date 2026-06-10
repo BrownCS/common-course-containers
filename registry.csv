@@ -1,7 +1,7 @@
 # Common Course Containers - Local Course Registry
-# Format: course_id,repository_url,course_name,semester[,base_image]
+# Format (required columns): id,repo_url,name,semester
+# Optional columns: requires_container (true/false),container_image,container_arch,default_branch,notes
 # Lines starting with # are comments
-# base_image is optional - if empty, uses default shared container
 
 default,,Default Container,always,
 csci-0300-demo,https://github.com/qiaochloe/csci-0300-demo.git,Systems Programming,fall2024,

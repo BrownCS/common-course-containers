@@ -10,6 +10,8 @@ The installation process will also prompt users about where the /courses directo
 
 The install process will also set any necessary variables and ensure dependencies are installed. Question: Do any of these have to be chosen by the user? Or is the courses directory the only important one? We also might not need to check for direnv anymore, see later.
 
+Note on implementation order: during development it's advisable to implement the "git-install" (developer/bootstrap) workflow first — the user clones the repo and runs `./install.sh` or `ccc init`. This lets us iterate quickly on behavior and auto-update semantics. Packaging (deb/rpm/homebrew) should be implemented later once core features are stable.
+
 
 ### Running a course environemtn with CCC
 
@@ -159,6 +161,11 @@ Milestone 8 — Optional features and follow-ups
 - Add `--archive` support and implement per-course archive entries in the registry.
 - Add small automated tests (bats or sh) for fast CI checks.
 - Add a small README section describing how to package CCC for apt/rpm/homebrew.
+
+Milestone 9 — Packaging (deferred)
+- Create packaging recipes for target platforms (deb, rpm, Homebrew formula).
+- Implement package post-install hooks that run the same init logic as `ccc init` (prompt for `CCC_COURSES_DIR`, ask auto-update opt-in, create config files) without requiring the user to run manual steps.
+- Document packaging instructions and CI steps to build the packages. This milestone is explicitly deferred until core functionality (Milestones 1–7) is stable.
 
 Each milestone should be one or more code commits and include 1–2 tests. I can start with Milestone 1 now (config + registry parser). If you want that, say "Start milestone 1" and I'll add `lib/config.sh`, extend `registry.csv` with column docs, and create `lib/registry.sh` with unit tests.
 
