@@ -11,8 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$SCRIPT_DIR/lib/utils.sh"
 
-if [[ -f "$SCRIPT_DIR/lib/container.sh" ]]; then
-    source "$SCRIPT_DIR/lib/container.sh"
+if [[ -f "$SCRIPT_DIR/lib/container_helpers.sh" ]]; then
+    source "$SCRIPT_DIR/lib/container_helpers.sh"
 else
     # Fallback container runtime detection
     detect_container_runtime() {

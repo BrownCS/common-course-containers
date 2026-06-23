@@ -5,17 +5,20 @@ set -euo pipefail
 
 get_container_name() {
   local course="${1:-}"
-  if [[ -z "$course" ]]; then
-    echo "$CONTAINER_NAME"
-    return
+  # Return a deterministic container name. If a course is provided, use the
+  # image prefix plus the course id. Otherwise fall back to an explicit
+  # CONTAINER_NAME if set, or the image prefix.
+  local prefix="${CCC_IMAGE_PREFIX:-ccc}"
+  if [[ -n "$course" ]]; then
+    echo "${prefix}-${course}"
+    return 0
   fi
 
-  local base_image
-  base_image="$(get_course_base_image "$course")"
-  if [[ "$base_image" == "default" || -z "$base_image" ]]; then
-    echo "$CONTAINER_NAME"
+  # No course provided: prefer explicit CONTAINER_NAME, else the prefix.
+  if [[ -n "${CONTAINER_NAME:-}" ]]; then
+    echo "${CONTAINER_NAME}"
   else
-    echo "ccc-$(echo "$base_image" | tr ':' '-')"
+    echo "${prefix}"
   fi
 }
 

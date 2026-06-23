@@ -37,6 +37,21 @@ get_course_url() {
   get_course_info "$1" "url"
 }
 
+ensure_course_exists() {
+  local course="$1"
+  if [[ -z "$course" ]]; then
+    echo_error "No course specified"
+    list_available_courses
+    return 1
+  fi
+
+  if ! get_course_url "$course" >/dev/null 2>&1; then
+    echo_error "Course '$course' not found in registry"
+    list_available_courses
+    return 1
+  fi
+}
+
 get_course_base_image() {
   get_course_info "$1" "base_image"
 }
