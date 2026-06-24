@@ -55,7 +55,6 @@ set_config() {
 
     # Ensure file exists
     touch "$cfg" || return 1
-
     # Remove existing key and append new key=value
     # Use temporary file
     tmp="$cfg.tmp"

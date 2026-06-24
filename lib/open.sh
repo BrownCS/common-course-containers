@@ -45,55 +45,13 @@ ccd_clone_if_missing() {
     fi
 }
 
-# Run course setup inside the host (local) mode — guarded by heuristics
-local_setup_if_safe() {
-    course_dir="$1"
-    if [ -f "$course_dir/setup.sh" ]; then
-        if [ -x "$course_dir/setup.sh" ]; then
-            # Simple heuristic: don't run setup.sh on host if it references apt or sudo
-            if grep -E "\b(apt-get|apt|yum|dnf|sudo)\b" -q "$course_dir/setup.sh"; then
-                echo "setup.sh appears to perform system package operations; refusing to run on host. Use container mode." >&2
-                return 6
-            fi
-            (cd "$course_dir" && ./setup.sh) || { echo "setup.sh failed" >&2; return 7; }
-        else
-            echo "Found setup.sh but it is not executable; skipping" >&2
-        fi
-    fi
-}
-
 start_container_for_course() {
     course_id="$1"
     course_dir="$2"
-    # Ensure container runtime helper is available
-    if [ -f "$repo_root/lib/container_helpers.sh" ]; then
-        # shellcheck disable=SC1090
-        . "$repo_root/lib/container_helpers.sh"
-    else
-        echo "Container helpers not found" >&2
-        return
-    fi
-
-    # Load runtime helpers
-    if [ -f "$repo_root/lib/runtime.sh" ]; then
-        # shellcheck disable=SC1090
-        . "$repo_root/lib/runtime.sh"
-    fi
 
     # Determine image/container names
-
     CONTAINER_RUNTIME=$(detect_container_runtime) || return 2
     NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
-    # Normalize CCC_COURSES_DIR leading tilde if present so we compute
-    # an absolute host path for binds (avoid creating a literal '~' dir).
-    if [ -n "${CCC_COURSES_DIR:-}" ]; then
-        case "$CCC_COURSES_DIR" in
-            ~/*) CCC_COURSES_DIR="${CCC_COURSES_DIR/#\~/$HOME}" ;;
-        esac
-        VOLUME_PATH="$(cd "$CCC_COURSES_DIR" >/dev/null 2>&1 && pwd || printf '%s' "$CCC_COURSES_DIR")"
-    else
-        VOLUME_PATH="$CCC_COURSES_DIR"
-    fi
 
     # Ensure image/container name defaults exist so runtime helpers don't hit
     # unbound-variable errors
@@ -151,18 +109,6 @@ ccc_open() {
         return 2
     fi
 
-    load_config 2>/dev/null || true
-    # Normalize tilde expansion for CCC_COURSES_DIR in case config contains ~
-    if [ -n "${CCC_COURSES_DIR:-}" ]; then
-        case "$CCC_COURSES_DIR" in
-            ~/*) CCC_COURSES_DIR="${CCC_COURSES_DIR/#\~/$HOME}" ;;
-        esac
-    fi
-    if [ -z "${CCC_COURSES_DIR:-}" ]; then
-        echo "CCC_COURSES_DIR not configured. Run 'ccc init' or set config." >&2
-        return 2
-    fi
-
     course_dir="$CCC_COURSES_DIR/$course_id"
     mkdir -p "$CCC_COURSES_DIR" || return 1
 
@@ -179,12 +125,6 @@ ccc_open() {
     requires_field=$(printf '%s' "$entry" | awk -F',' '{print $6}')
     if [ "${requires_field:-}" = "true" ]; then
         requires=true
-    fi
-    # Heuristic: if setup.sh mentions apt/sudo/direnv then prefer container
-    if [ -f "$course_dir/setup.sh" ]; then
-        if grep -E "\b(apt-get|apt|yum|dnf|sudo|direnv)\b" -q "$course_dir/setup.sh"; then
-            requires=true
-        fi
     fi
 
     if [ "$mode" = "local" ] && [ "$requires" = "true" ]; then
@@ -203,8 +143,8 @@ ccc_open() {
     fi
 
     if [ "$mode" = "local" ]; then
-        # Never automatically run setup.sh on the host. If present, run it
-        # only after dropping the user into a host shell (handled by user).
+        # Local mode only opens the course directory and session; standardized
+        # course setup is handled by the installer/manifests in container mode.
         write_session "$course_id" "" "$$"
         if [ "$no_shell" = "true" ]; then
             echo "Opened $course_id (local, no-shell)"
@@ -214,8 +154,8 @@ ccc_open() {
         cd "$course_dir" || return 1
         exec "$SHELL" --login
     else
-        # Container path: always start the container first, then run setup
-        # inside the running container. Prompt the user before starting.
+        # Container path: always start the container first, then run the
+        # standardized course installer inside the running container.
         printf 'This course will be run in a container. Start container now? [Y/n] '
         read -r ans
         case "$ans" in
@@ -232,14 +172,14 @@ ccc_open() {
         # Ensure runtime vars are set by start_container_for_course
         write_session "$course_id" "$CONTAINER_NAME" ""
 
-        # Copy the cooker installer into the course setup dir on the host so
-        # it is visible inside the container via the course bind mount. Then
-        # execute the installer inside the running container. The installer
-        # will read `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
-        if [ -f "$repo_root/lib/course_installer.sh" ]; then
+        # Copy the standardized course installer into the course setup dir on
+        # the host so it is visible inside the container via the bind mount.
+        # Then execute it inside the running container. The installer reads
+        # `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
+        if [ -f "$SCRIPT_DIR/lib/course_installer.sh" ]; then
             echo "Installing course installer into $course_dir/setup"
             mkdir -p "$course_dir/setup"
-            cp "$repo_root/lib/course_installer.sh" "$course_dir/setup/course_installer.sh"
+            cp "$SCRIPT_DIR/lib/course_installer.sh" "$course_dir/setup/course_installer.sh"
             chmod +x "$course_dir/setup/course_installer.sh" || true
             echo "Running course installer inside container: $CONTAINER_NAME"
             # Run the installer as root inside the container so it can apt install; use absolute path

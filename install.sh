@@ -51,11 +51,11 @@ done
 if [[ "$INSTALL_MODE" == "system" ]]; then
     BIN_DIR="/usr/local/bin"
     SHARE_DIR="/usr/local/share/ccc"
-    SEARCH_PATH="/usr/local/share/ccc"
+    # SEARCH_PATH="/usr/local/share/ccc"
 else
     BIN_DIR="$HOME/.local/bin"
     SHARE_DIR="$HOME/.local/share/ccc"
-    SEARCH_PATH="$HOME/.local/share/ccc"
+    # SEARCH_PATH="$HOME/.local/share/ccc"
 fi
 
 MAIN_SCRIPT="$BIN_DIR/ccc"
@@ -275,19 +275,8 @@ show_post_install_info() {
     fi
 
     echo "Next steps:"
-    echo "1. Initialize your courses directory:"
-    echo -e "   ${GREEN}ccc init${RESET}"
-    echo ""
-    echo "2. Setup a course:"
-    echo -e "   ${GREEN}ccc setup <course-name>${RESET}"
-    echo ""
-    echo "3. Run a course container:"
-    echo -e "   ${GREEN}ccc run <course-name>${RESET}"
-    echo ""
-    echo "4. View available courses:"
-    echo -e "   ${GREEN}ccc${RESET} (shows usage and available courses)"
-    echo ""
-    echo -e "For help: ${GREEN}ccc --help${RESET} or check the documentation"
+    echo "  - Initialize your courses directory:    ccc init"
+    echo "  - See README.md or DOCS.md for full usage and course setup steps"
     echo ""
     echo "To uninstall: run the uninstall script from the repository"
 }

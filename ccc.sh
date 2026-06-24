@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Script directory — use the directory containing this script if it has lib/,
 # otherwise fall back to the installed share directory.
-# NOTE: might be able to be trimmed later
+# NOTE: might be able to be trimmed later depending on installation implementation
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 if [[ ! -d "$SCRIPT_DIR/lib" ]]; then
   if [[ -d "$HOME/.local/share/ccc" ]]; then
@@ -17,7 +17,7 @@ if [[ ! -d "$SCRIPT_DIR/lib" ]]; then
   fi
 fi
 
-# Load library function (POSIX-safe)
+# Helper that loads files and gives more detailed errors
 source_lib() {
   lib="$1"
   lib_file="$SCRIPT_DIR/lib/$lib.sh"
@@ -58,18 +58,18 @@ case "${1:-}" in
   auto-update)
     case "${2:-}" in
     status)
-      echo "CCC_AUTO_UPDATE=${CCC_AUTO_UPDATE:-false}"
+      printf 'CCC_AUTO_UPDATE=%s\n' "${CCC_AUTO_UPDATE:-false}"
       exit 0 ;;
     enable)
       set_config CCC_AUTO_UPDATE true
-      echo "Automatic updates enabled"
+      printf '%s\n' "Automatic updates enabled"
       exit 0 ;;
     disable)
       set_config CCC_AUTO_UPDATE false
-      echo "Automatic updates disabled"
+      printf '%s\n' "Automatic updates disabled"
       exit 0 ;;
     *)
-      echo "Usage: ccc auto-update status|enable|disable"
+      printf '%s\n' "Usage: ccc auto-update status|enable|disable" >&2
       exit 2 ;;
     esac ;;
   init)
@@ -84,7 +84,7 @@ case "${1:-}" in
     # ccc open <course> [--local] [--no-shell]
     course="${2:-}"
     if [ -z "$course" ]; then
-      echo "Usage: ccc open <course> [--local] [--no-shell]" >&2
+      printf '%s\n' "Usage: ccc open <course> [--local] [--no-shell]" >&2
       exit 2
     fi
     # shift past 'open' and the course name
@@ -99,7 +99,7 @@ case "${1:-}" in
       get)
         key="${3:-}"
         if [ -z "$key" ]; then
-          echo "Usage: ccc config get <KEY>" >&2
+          printf '%s\n' "Usage: ccc config get <KEY>" >&2
           exit 2
         fi
         load_config
@@ -109,14 +109,14 @@ case "${1:-}" in
       set)
         key="${3:-}"; value="${4:-}"
         if [ -z "$key" ] || [ -z "$value" ]; then
-          echo "Usage: ccc config set <KEY> <VALUE>" >&2
+          printf '%s\n' "Usage: ccc config set <KEY> <VALUE>" >&2
           exit 2
         fi
         set_config "$key" "$value"
-        echo "Set $key"
+        printf 'Set %s\n' "$key"
         exit 0 ;;
       *)
-        echo "Usage: ccc config get|set" >&2
+        printf '%s\n' "Usage: ccc config get|set" >&2
         exit 2 ;;
     esac ;;
 esac

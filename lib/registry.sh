@@ -2,23 +2,8 @@
 # Minimal registry parsing helpers for CCC
 # Usage: registry_lookup <course_id>
 
-# Prefer SCRIPT_DIR when this file is sourced by the main entrypoint (ccc.sh)
-if [ -n "${SCRIPT_DIR:-}" ]; then
-    repo_root="$SCRIPT_DIR"
-else
-    # Fallback: attempt to infer repository root relative to this file; this
-    # may not be perfect when sourced from another script, so callers that
-    # know the install location should set SCRIPT_DIR before sourcing.
-    repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-fi
-
-# Allow overriding the registry file via environment for tests or deployments
-if [ -n "${CCC_REGISTRY_FILE:-}" ]; then
-    registry_file="$CCC_REGISTRY_FILE"
-else
-    registry_file="$repo_root/registry.csv"
-fi
-
+# Define Registry File
+registry_file="$SCRIPT_DIR/registry.csv"
 
 registry_lookup() {
     course_id=$1
