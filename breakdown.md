@@ -10,7 +10,7 @@ Assuming a brand new student, who knows nothing but what is given in the README,
 
 --> checks installation permissions (like system vs user, not having sudo when you need it, or using root when unnecessary)
 
---> checks, in order, for these dependencies: Podman, Git, Direnv
+--> checks, in order, for these dependencies: Podman and Git
 
 --> validates existence of ccc.sh, registry.sh, Dockerfile.template, "VERSION" and "lib" directory
 

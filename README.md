@@ -76,7 +76,7 @@ sudo ./install.sh --system
 1. **Course registry** (`registry.csv`) defines available courses
 2. **Setup** clones course repos and runs setup scripts
 3. **Containers** provide isolated, consistent environments
-4. **direnv** manages per-course environment variables
+4. **CCC** manages course environment variables itself
 
 ## Development
 

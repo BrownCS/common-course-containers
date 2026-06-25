@@ -184,7 +184,6 @@ start_new_container() {
     --cap-add=NET_ADMIN
     --volume "$VOLUME_PATH":/courses
     --workdir "${CONTAINER_WORKDIR:-/courses}"
-    --env DIRENV_CONFIG=/root/.config/direnv
   )
 
   run_args+=(

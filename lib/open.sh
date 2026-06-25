@@ -59,26 +59,19 @@ start_container_for_course() {
     IMAGE_NAME="${IMAGE_NAME:-$CCC_IMAGE_PREFIX}"
     CONTAINER_NAME="$(get_container_name "$course_id")"
 
-    # Determine architecture/platform if not set
-    if [ -z "${ARCH:-}" ]; then
-        ARCH="$(uname -m)"
-        if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-            PLATFORM="linux/arm64"
-        else
-            PLATFORM="linux/amd64"
-        fi
-    fi
+    # Determine architecture/platform, defaulting to the machine architecture
+    PLATFORM="$(get_course_container_platform "$course_id")"
+    case "$PLATFORM" in
+      linux/arm64) ARCH="arm64" ;;
+      linux/amd64) ARCH="amd64" ;;
+      *) ARCH="$(uname -m)" ;;
+    esac
 
-    # Build or pull image based on registry base_image
-    base_image=$(get_course_base_image "$course_id") || base_image="default"
+    # Build or pull image based on registry image mode
+    base_image=$(get_course_build_base_image "$course_id") || base_image="$CCC_DEFAULT_BASE_IMAGE"
     image_name="$(get_image_name "$course_id")"
 
-    if [ "$base_image" != "default" ] && [ -n "$base_image" ]; then
-        build_image "$base_image" "$image_name" || return 3
-    else
-        # ensure default base image built
-        build_image "$CCC_DEFAULT_BASE_IMAGE" "$image_name" || return 3
-    fi
+    build_image "$base_image" "$image_name" || return 3
 
     CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
     start_new_container
@@ -94,7 +87,7 @@ start_container_for_course() {
 ccc_open() {
     course_id="$1"
     shift || true
-    mode="container"
+    mode="local"
     no_shell=false
     while [ "${1:-}" != "" ]; do
         case "$1" in
@@ -118,28 +111,12 @@ ccc_open() {
     # Clone if missing
     ccd_clone_if_missing "$course_id" "$course_dir" || return $?
 
-    # Detect if course likely requires a container
-    requires=false
-    entry=$(registry_lookup "$course_id" 2>/dev/null) || true
-    # optional 6th column is requires_container
-    requires_field=$(printf '%s' "$entry" | awk -F',' '{print $6}')
-    if [ "${requires_field:-}" = "true" ]; then
-        requires=true
-    fi
-
-    if [ "$mode" = "local" ] && [ "$requires" = "true" ]; then
-        # Prompt the student to enter container instead
-        printf 'This course appears to require a containerized environment. Enter container? [Y/n] '
-        read -r answer
-        case "$answer" in
-            [nN]|[nN][oO])
-                echo "Aborting: course setup requires container. To force local, run: ccc open $course_id --local --force-host"
-                return 1
-                ;;
-            *)
-                mode="container"
-                ;;
-        esac
+    # Detect whether the registry says this course requires a container.
+    requires=$(get_course_requires_container "$course_id") || requires="true"
+    if [ "$requires" != "true" ]; then
+        mode="local"
+    else
+        mode="container"
     fi
 
     if [ "$mode" = "local" ]; then

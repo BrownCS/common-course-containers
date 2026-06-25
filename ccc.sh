@@ -36,6 +36,7 @@ source_lib "utils"
 source_lib "config"
 source_lib "registry"
 source_lib "courses"
+source_lib "container_helpers"
 source_lib "runtime"
 # Make REGISTRY_FILE available to libraries that expect it
 REGISTRY_FILE="${registry_file:-$SCRIPT_DIR/registry.csv}"
@@ -102,6 +103,9 @@ case "${1:-}" in
           printf '%s\n' "Usage: ccc config get <KEY>" >&2
           exit 2
         fi
+        if [ "$key" = "courses" ]; then
+          key=CCC_COURSES_DIR
+        fi
         load_config
         # shellcheck disable=SC2086
         eval "printf '%s\n' \"\${${key}:-}\""
@@ -111,6 +115,9 @@ case "${1:-}" in
         if [ -z "$key" ] || [ -z "$value" ]; then
           printf '%s\n' "Usage: ccc config set <KEY> <VALUE>" >&2
           exit 2
+        fi
+        if [ "$key" = "courses" ]; then
+          key=CCC_COURSES_DIR
         fi
         set_config "$key" "$value"
         printf 'Set %s\n' "$key"

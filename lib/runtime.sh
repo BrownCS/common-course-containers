@@ -29,13 +29,26 @@ get_image_name() {
     return
   fi
 
-  local base_image
-  base_image="$(get_course_base_image "$course")"
-  if [[ "$base_image" == "default" || -z "$base_image" ]]; then
-    echo "$IMAGE_NAME"
+  local image_mode
+  image_mode="$(get_course_image_mode "$course")"
+  if [[ "$image_mode" == "course-specific" ]]; then
+    echo "ccc-${course}"
   else
-    echo "ccc:$(echo "$base_image" | tr ':' '-')"
+    echo "$IMAGE_NAME"
   fi
+}
+
+get_course_platform() {
+  local course="${1:-}"
+  if [[ -z "$course" ]]; then
+    case "$(uname -m)" in
+      arm64|aarch64) echo "linux/arm64" ;;
+      *) echo "linux/amd64" ;;
+    esac
+    return
+  fi
+
+  get_course_container_platform "$course"
 }
 
 check_container_runtime() {
@@ -84,22 +97,16 @@ build_course_image() {
   iname="$(get_image_name "$course")"
 
   local base_image
-  base_image="$(get_course_base_image "$course")"
-  if [[ "$base_image" == "default" || -z "$base_image" ]]; then
-    base_image="$CCC_DEFAULT_BASE_IMAGE"
-  fi
+  base_image="$(get_course_build_base_image "$course")"
 
   build_image "$base_image" "$iname"
 }
 
 # Enter (or create) a container for a course.
-# Pass --setup to run the course's setup.sh inside the container.
+# The standardized course installer is handled by the caller.
 enter_course() {
   echo "ENTERING COURSE"
   local course="$1"
-  local run_setup=false
-  [[ "${2:-}" == "--setup" ]] && run_setup=true
-
   local cname iname course_workdir
   cname="$(get_container_name "$course")"
   iname="$(get_image_name "$course")"
@@ -111,11 +118,6 @@ enter_course() {
   show_course_status "$course"
   build_course_image "$course"
   echo "made it there"
-  local startup_cmd=""
-  if $run_setup && [[ "$course" != "default" ]] && [[ -f "$VOLUME_PATH/$course/setup.sh" ]]; then
-    startup_cmd="cd '$course_workdir' && sudo apt-get update -y && sudo bash setup.sh"
-  fi
-
   if has_container "$course"; then
     local status
     status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$cname")
@@ -125,12 +127,11 @@ enter_course() {
     fi
 
     local cmd="cd '$course_workdir' && exec bash"
-    [[ -n "$startup_cmd" ]] && cmd="$startup_cmd; exec bash"
     echo_and_run "$CONTAINER_RUNTIME" exec -it "$cname" bash -c "$cmd"
   else
     CONTAINER_NAME="$cname"
     IMAGE_NAME="$iname"
     CONTAINER_WORKDIR="$course_workdir"
-    start_new_container "$startup_cmd"
+    start_new_container
   fi
 }

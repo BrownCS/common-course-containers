@@ -96,14 +96,9 @@ check_dependencies() {
     fi
 
     # Check for git (used by courses)
+    # this is used by CCC to clone/pull courses, so we keep it
     if ! command -v git >/dev/null 2>&1; then
         missing_deps+=("git")
-    fi
-
-    # Check for direnv (used by courses)
-    if ! command -v direnv >/dev/null 2>&1; then
-        log_warning "direnv not found - course environments may not work properly"
-        echo "  Install with: sudo apt install direnv  # or brew install direnv"
     fi
 
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
