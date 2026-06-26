@@ -47,7 +47,6 @@ ccd_clone_if_missing() {
 
 start_container_for_course() {
     course_id="$1"
-    course_dir="$2"
 
     # Determine image/container names
     CONTAINER_RUNTIME=$(detect_container_runtime) || return 2
@@ -80,7 +79,6 @@ start_container_for_course() {
         echo "Failed to start container" >&2
         return $rc
     fi
-
     return 0
 }
 
@@ -144,7 +142,7 @@ ccc_open() {
                 ;;
         esac
 
-    start_container_for_course "$course_id" "$course_dir" || return $?
+    start_container_for_course "$course_id" || return $?
 
         # Ensure runtime vars are set by start_container_for_course
         write_session "$course_id" "$CONTAINER_NAME" ""

@@ -90,10 +90,10 @@ case "${1:-}" in
     fi
     # shift past 'open' and the course name
     shift 2 || true
-  # load open helper (required)
-  source_lib "open"
-  ccc_open "$course" "$@"
-  exit $? ;;
+    # load open helper (required)
+    source_lib "open"
+    ccc_open "$course" "$@"
+    exit $? ;;
   config)
     # ccc config get KEY | ccc config set KEY VALUE
     case "${2:-}" in
@@ -103,6 +103,7 @@ case "${1:-}" in
           printf '%s\n' "Usage: ccc config get <KEY>" >&2
           exit 2
         fi
+        # this makes it easier to change courses dir
         if [ "$key" = "courses" ]; then
           key=CCC_COURSES_DIR
         fi

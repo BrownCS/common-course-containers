@@ -169,14 +169,9 @@ setup_xhost() {
 }
 
 start_new_container() {
-  # Take an optional command to run before dropping to interactive bash
-  local startup_cmd="${1:-}"
-
   setup_xhost
   create_network
 
-  local user="$(id -un)"
-  local group="$(id -gn)"
   local uid="$(id -u)"
   local gid="$(id -g)"
 
@@ -224,8 +219,6 @@ start_new_container() {
     esac
     # fall through to create a new container
   fi
-  interactive_args=( --interactive --tty )
-
   local run_args=(
     "$run_cmd" "$run_verb"
     "${interactive_args[@]}"
@@ -271,20 +264,12 @@ start_new_container() {
 
   run_args+=( "$IMAGE_NAME" )
 
-  # For detached starts, if a startup command is provided, run it and then
-  # keep the container alive by exec'ing an interactive shell. If no startup
-  # command is provided, start a shell that stays alive so the container is
-  # reusable.
-  if [[ -n "$startup_cmd" ]]; then
-    run_args+=( -c "$startup_cmd; exec bash" )
-  fi
-
   echo "Creating and starting container '$CONTAINER_NAME'..."
   # Execute the run command and capture exit status.
-  echo_and_run "${run_args[@]}"
-  run_rc=$?
-
-  if [ $run_rc -ne 0 ]; then
+  if echo_and_run "${run_args[@]}"; then
+    :
+  else
+    run_rc=$?
     echo "Container runtime failed to start the container (rc=$run_rc)" >&2
     return $run_rc
   fi
