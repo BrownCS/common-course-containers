@@ -131,8 +131,12 @@ ccc_open() {
     else
         # Container path: always start the container first, then run the
         # standardized course installer inside the running container.
-        printf 'This course will be run in a container. Start container now? [Y/n] '
-        read -r ans
+        if [ -t 0 ] && [ -t 1 ]; then
+            printf 'This course will be run in a container. Start container now? [Y/n] '
+            read -r ans
+        else
+            ans='y'
+        fi
         case "$ans" in
             [nN]|[nN][oO])
                 echo "Aborting: container start declined"
@@ -170,6 +174,10 @@ ccc_open() {
         fi
 
     echo "Attaching to container: $CONTAINER_NAME"
-    echo_and_run "$CONTAINER_RUNTIME" exec -it "$CONTAINER_NAME" bash -l
+    if [ -t 0 ] && [ -t 1 ]; then
+        echo_and_run "$CONTAINER_RUNTIME" exec -it "$CONTAINER_NAME" bash -l
+    else
+        echo_and_run "$CONTAINER_RUNTIME" exec -i "$CONTAINER_NAME" bash -l
+    fi
     fi
 }

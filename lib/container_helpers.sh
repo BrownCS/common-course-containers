@@ -175,9 +175,15 @@ start_new_container() {
   local uid="$(id -u)"
   local gid="$(id -g)"
 
+  VOLUME_PATH="${VOLUME_PATH:-${CCC_COURSES_DIR:-${HOME}/courses}}"
+  mkdir -p "$VOLUME_PATH" 2>/dev/null || true
+
   local run_cmd="$CONTAINER_RUNTIME"
   local run_verb="run"
-  local interactive_args=( --interactive --tty )
+  local interactive_args=( --interactive )
+  if [ -t 0 ] && [ -t 1 ]; then
+    interactive_args+=( --tty )
+  fi
 
   # If a container with this name already exists, try to reuse it.
   if "$CONTAINER_RUNTIME" container exists "$CONTAINER_NAME" >/dev/null 2>&1; then
@@ -221,6 +227,7 @@ start_new_container() {
   fi
   local run_args=(
     "$run_cmd" "$run_verb"
+    --detach
     "${interactive_args[@]}"
     --name "$CONTAINER_NAME"
     --hostname "$CONTAINER_NAME"
@@ -237,7 +244,13 @@ start_new_container() {
 
   # Use a portable --user uid:gid mapping unless START_AS_ROOT=1 is set.
   # Starting as root is useful for running setup steps that require apt/sudo.
-  if [ "${START_AS_ROOT:-0}" != "1" ]; then
+  # Some environments (including this one) reject large or unmapped host IDs,
+  # so fall back to root in that case rather than failing container startup.
+  if [ "${START_AS_ROOT:-0}" = "1" ]; then
+    echo "Starting container as root (START_AS_ROOT=1)."
+  elif [ "$uid" -gt 60000 ] || [ "$gid" -gt 60000 ]; then
+    echo "Host UID/GID are outside the normal range; starting container as root."
+  else
     run_args+=( --user "$uid:$gid" )
   fi
 
