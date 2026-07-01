@@ -18,10 +18,10 @@ set -euo pipefail
 detect_container_runtime() {
   if command -v podman >/dev/null 2>&1; then
     echo "podman"
-  else
-    log_error "Please install podman to use CCC: https://podman.io" #isn't this also done in install.sh check_dependencies()?
-    exit 1
+    return 0
   fi
+  log_error "Please install podman to use CCC: https://podman.io" #isn't this also done in install.sh check_dependencies()?
+  return 1
 }
 
 # Network utilities
@@ -82,15 +82,40 @@ validate_base_image() {
   fi
 }
 
+get_image_build_stamp() {
+  local image_name="${1:-$IMAGE_NAME}"
+  local stamp_file="$SCRIPT_DIR/.ccc-image-buildstamp-${image_name//[^A-Za-z0-9._-]/_}"
+  local tmp_file
+  tmp_file="$(mktemp)"
+  {
+    [ -f "$SCRIPT_DIR/Dockerfile.template" ] && sha256sum "$SCRIPT_DIR/Dockerfile.template"
+    [ -f "$SCRIPT_DIR/ccc.sh" ] && sha256sum "$SCRIPT_DIR/ccc.sh"
+    [ -f "$SCRIPT_DIR/registry.csv" ] && sha256sum "$SCRIPT_DIR/registry.csv"
+    find "$SCRIPT_DIR/lib" -maxdepth 1 -type f -name '*.sh' 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null
+  } >"$tmp_file"
+  local stamp
+  stamp=$(sha256sum "$tmp_file" | awk '{print $1}')
+  rm -f "$tmp_file"
+  printf '%s\n' "$stamp"
+  printf '%s\n' "$stamp" >"$stamp_file"
+}
+
 build_image() {
   local base_image="${1:-$CCC_DEFAULT_BASE_IMAGE}" # Default to ubuntu:noble
   local image_name="${2:-ccc}"          # Default to ccc
   local arch="${ARCH}"
+  local stamp_file="$SCRIPT_DIR/.ccc-image-buildstamp-${image_name//[^A-Za-z0-9._-]/_}"
+  local build_stamp
 
-  # Check if image already exists
+  build_stamp="$(get_image_build_stamp "$image_name")"
+
+  # Check if image already exists and matches the current CCC sources.
   if "$CONTAINER_RUNTIME" image exists "$image_name" &>/dev/null; then
-    echo "Image '$image_name' already exists. Skipping build."
-    return 0
+    if [ -f "$stamp_file" ] && [ "$(cat "$stamp_file" 2>/dev/null || true)" = "$build_stamp" ]; then
+      echo "Image '$image_name' already exists and matches current CCC sources. Skipping build."
+      return 0
+    fi
+    echo "Image '$image_name' is out of date with current CCC sources; rebuilding..."
   fi
 
   # Validate base image
@@ -126,6 +151,7 @@ build_image() {
     return 1
   fi
 
+  printf '%s\n' "$build_stamp" >"$stamp_file"
   echo "Successfully built image: $image_name"
 }
 

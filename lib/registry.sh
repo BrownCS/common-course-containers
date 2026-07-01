@@ -3,7 +3,16 @@
 # Usage: registry_lookup <course_id>
 
 # Define Registry File
-registry_file="$SCRIPT_DIR/registry.csv"
+registry_file="${CCC_REGISTRY_FILE:-${REGISTRY_FILE:-}}"
+if [ -z "$registry_file" ]; then
+    if [ -n "${SCRIPT_DIR:-}" ] && [ -f "$SCRIPT_DIR/registry.csv" ]; then
+        registry_file="$SCRIPT_DIR/registry.csv"
+    elif [ -f "$(dirname "$0")/../registry.csv" ]; then
+        registry_file="$(CDPATH= cd -- "$(dirname "$0")/.." 2>/dev/null && pwd)/registry.csv"
+    else
+        registry_file="registry.csv"
+    fi
+fi
 
 registry_field_index() {
     case "$1" in

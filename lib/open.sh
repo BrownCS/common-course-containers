@@ -24,6 +24,31 @@ write_session() {
     chmod 600 "$session_file" 2>/dev/null || true
 }
 
+clear_session() {
+    session_file=$(get_session_file 2>/dev/null || true)
+    if [ -n "$session_file" ]; then
+        rm -f "$session_file" 2>/dev/null || true
+    fi
+}
+
+ccc_cleanup_environment() {
+    reason=${1:-shell-exit}
+    exit_code=${2:-0}
+    clear_session
+    export CCC_MANAGED_ENV=false
+    if [ "$reason" != "shell-exit" ]; then
+        echo "Cleaning up stale course environment ($reason)" >&2
+    fi
+    return "$exit_code"
+}
+
+is_managed_environment() {
+    if [ "${CCC_MANAGED_ENV:-}" = "true" ]; then
+        return 0
+    fi
+    return 1
+}
+
 ccd_clone_if_missing() {
     course_id="$1"
     course_dir="$2"
@@ -39,8 +64,30 @@ ccd_clone_if_missing() {
                 return 4
             fi
         else
-            echo "No repository URL for course $course_id and course directory missing" >&2
-            return 5
+            echo "Creating course directory for $course_id at $course_dir"
+            mkdir -p "$course_dir" || return 5
+        fi
+    fi
+}
+
+stop_container_for_course() {
+    course_id="$1"
+    if [ -z "${course_id:-}" ]; then
+        return 0
+    fi
+
+    container_name="$(get_container_name "$course_id")"
+    if [ -z "${container_name:-}" ]; then
+        return 0
+    fi
+
+    if command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 2>/dev/null; then
+        :
+    fi
+
+    if [ -n "${CONTAINER_RUNTIME:-}" ]; then
+        if "$CONTAINER_RUNTIME" container exists "$container_name" >/dev/null 2>&1; then
+            "$CONTAINER_RUNTIME" stop "$container_name" >/dev/null 2>&1 || true
         fi
     fi
 }
@@ -109,10 +156,17 @@ ccc_open() {
     # Clone if missing
     ccd_clone_if_missing "$course_id" "$course_dir" || return $?
 
+    if is_managed_environment; then
+        echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
+        return 1
+    fi
+
     # Detect whether the registry says this course requires a container.
     requires=$(get_course_requires_container "$course_id") || requires="true"
     if [ "$requires" != "true" ]; then
         mode="local"
+    elif is_container_environment; then
+        mode="container"
     else
         mode="container"
     fi
@@ -120,6 +174,7 @@ ccc_open() {
     if [ "$mode" = "local" ]; then
         # Local mode only opens the course directory and session; standardized
         # course setup is handled by the installer/manifests in container mode.
+        export CCC_MANAGED_ENV=true
         write_session "$course_id" "" "$$"
         if [ "$no_shell" = "true" ]; then
             echo "Opened $course_id (local, no-shell)"
@@ -127,45 +182,73 @@ ccc_open() {
         fi
         echo "Entering local course directory: $course_dir"
         cd "$course_dir" || return 1
-        exec "$SHELL" --login
+        "$SHELL" --login
+        rc=$?
+        ccc_cleanup_environment "shell-exit" "$rc"
+        return "$rc"
     else
-        # Container path: always start the container first, then run the
-        # standardized course installer inside the running container.
-        if [ -t 0 ] && [ -t 1 ]; then
-            printf 'This course will be run in a container. Start container now? [Y/n] '
-            read -r ans
+        # Container path: if we are already inside a CCC container, reuse the
+        # current environment instead of trying to start a nested container.
+        if is_container_environment; then
+            CONTAINER_NAME="$(hostname 2>/dev/null || echo "ccc-container")"
+            CONTAINER_RUNTIME=""
+            CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
+            echo "Using current container environment: $CONTAINER_NAME"
         else
-            ans='y'
-        fi
-        case "$ans" in
-            [nN]|[nN][oO])
-                echo "Aborting: container start declined"
-                return 1
-                ;;
-            *)
-                ;;
-        esac
+            # Host path: start the container first, then run the standardized
+            # course installer inside the running container.
+            if [ -t 0 ] && [ -t 1 ]; then
+                printf 'This course will be run in a container. Start container now? [Y/n] '
+                read -r ans
+            else
+                ans='y'
+            fi
+            case "$ans" in
+                [nN]|[nN][oO])
+                    echo "Aborting: container start declined"
+                    return 1
+                    ;;
+                *)
+                    ;;
+            esac
 
-    start_container_for_course "$course_id" || return $?
+            start_container_for_course "$course_id" || return $?
+        fi
 
         # Ensure runtime vars are set by start_container_for_course
+        CONTAINER_NAME="${CONTAINER_NAME:-$(hostname 2>/dev/null || echo "$course_id")}" 
+        export CCC_MANAGED_ENV=true
+        host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
+        container_course_dir="/courses/$course_id"
+        mkdir -p "$host_course_dir" 2>/dev/null || true
         write_session "$course_id" "$CONTAINER_NAME" ""
 
-        # Copy the standardized course installer into the course setup dir on
-        # the host so it is visible inside the container via the bind mount.
-        # Then execute it inside the running container. The installer reads
+        # Use a fixed internal installer location that is independent of the
+        # course repository layout. The installer reads
         # `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
-        if [ -f "$SCRIPT_DIR/lib/course_installer.sh" ]; then
-            echo "Installing course installer into $course_dir/setup"
-            mkdir -p "$course_dir/setup"
-            cp "$SCRIPT_DIR/lib/course_installer.sh" "$course_dir/setup/course_installer.sh"
-            chmod +x "$course_dir/setup/course_installer.sh" || true
-            echo "Running course installer inside container: $CONTAINER_NAME"
-            # Run the installer as root inside the container so it can apt install; use absolute path
-            INSTALLER_PATH="$CONTAINER_WORKDIR/setup/course_installer.sh"
-            echo_and_run "$CONTAINER_RUNTIME" exec -i --user 0 "$CONTAINER_NAME" bash -c "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$CONTAINER_WORKDIR'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi"
+        INSTALLER_PATH="/usr/local/share/ccc/course_installer.sh"
+        host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
+        container_course_dir="${CONTAINER_WORKDIR:-/courses/$course_id}"
+        INSTALLER_CACHE_FILE="$host_course_dir/.ccc-installer-ran"
+        echo "Running course installer inside container: $CONTAINER_NAME"
+        if is_container_environment; then
+            if [ -x "$INSTALLER_PATH" ]; then
+                if [ -f "$INSTALLER_CACHE_FILE" ]; then
+                    echo "Installer already ran for $container_course_dir; skipping"
+                else
+                    "$INSTALLER_PATH" "$container_course_dir" || return $?
+                    : > "$INSTALLER_CACHE_FILE"
+                fi
+            else
+                echo "Installer not found at $INSTALLER_PATH" >&2
+                return 2
+            fi
         else
-            echo "Installer not found; skipping automated setup" >&2
+            "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then if [ -f '$container_course_dir/.ccc-installer-ran' ]; then echo 'Installer already ran for $container_course_dir; skipping'; else '$INSTALLER_PATH' '$container_course_dir' && : > '$container_course_dir/.ccc-installer-ran'; fi; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+                return "$rc"
+            fi
         fi
 
         if [ "$no_shell" = "true" ]; then
@@ -173,11 +256,23 @@ ccc_open() {
             return 0
         fi
 
-    echo "Attaching to container: $CONTAINER_NAME"
-    if [ -t 0 ] && [ -t 1 ]; then
-        echo_and_run "$CONTAINER_RUNTIME" exec -it "$CONTAINER_NAME" bash -l
-    else
-        echo_and_run "$CONTAINER_RUNTIME" exec -i "$CONTAINER_NAME" bash -l
-    fi
+        if is_container_environment; then
+            echo "Using existing container shell"
+            "$SHELL" --login
+            rc=$?
+            ccc_cleanup_environment "shell-exit" "$rc"
+            return "$rc"
+        fi
+
+        echo "Attaching to container: $CONTAINER_NAME"
+        if [ -t 0 ] && [ -t 1 ]; then
+            "$CONTAINER_RUNTIME" exec -it -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "mkdir -p '/courses/$course_id' && export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l"
+            rc=$?
+        else
+            "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "mkdir -p '/courses/$course_id' && export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l"
+            rc=$?
+        fi
+        ccc_cleanup_environment "shell-exit" "$rc"
+        return "$rc"
     fi
 }

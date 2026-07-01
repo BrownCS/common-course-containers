@@ -43,6 +43,17 @@ REGISTRY_FILE="${registry_file:-$SCRIPT_DIR/registry.csv}"
 
 # load config (courses directory and auto update preferences)
 load_config 2>/dev/null || true
+export CCC_MANAGED_ENV=${CCC_MANAGED_ENV:-false}
+
+# Default courses directory for both host and container environments.
+# In containers, the mounted courses tree should be available at /courses.
+if [ -z "${CCC_COURSES_DIR:-}" ]; then
+  if is_container_environment; then
+    export CCC_COURSES_DIR="/courses"
+  else
+    export CCC_COURSES_DIR="${HOME}/courses"
+  fi
+fi
 
 ## Resolve and normalize CCC_COURSES_DIR early so all libraries see absolute pth
 if [ -n "${CCC_COURSES_DIR:-}" ]; then

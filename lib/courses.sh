@@ -3,14 +3,18 @@ set -euo pipefail
 
 # Course and registry management utilities
 
-get_course_info() {
-  local course="$1"
-  local field="${2:-url}"  # url, name, semester, requires_container, image_mode, image_ref, container_arch, default_branch, notes, or all
-
+require_registry_file() {
   if [[ ! -f "$REGISTRY_FILE" ]]; then
     echo_error "Registry file not found: $REGISTRY_FILE"
     return 1
   fi
+}
+
+get_course_info() {
+  local course="$1"
+  local field="${2:-url}"  # url, name, semester, requires_container, image_mode, image_ref, container_arch, default_branch, notes, or all
+
+  require_registry_file || return 1
 
   # Parse CSV, skip comments and empty lines
   while IFS=',' read -r course_id repo_url name semester requires_container image_mode image_ref container_arch default_branch notes; do
@@ -103,10 +107,7 @@ ensure_course_exists() {
 }
 
 list_available_courses() {
-  if [[ ! -f "$REGISTRY_FILE" ]]; then
-    echo_error "Registry file not found: $REGISTRY_FILE"
-    return 1
-  fi
+  require_registry_file || return 1
 
   echo "Available courses:"
   while IFS=',' read -r course_id repo_url name semester requires_container image_mode image_ref container_arch default_branch notes; do

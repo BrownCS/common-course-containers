@@ -39,8 +39,13 @@ log_error() {
 }
 
 # Container detection
+is_container_environment() {
+  [[ -f /etc/ccc-container ]]
+}
+
+# Backward-compatible wrapper for older callers.
 is_ccc_container() {
-  [[ -f /etc/ccc-container ]] #isn't this Bash? making a note bc was told not to use bash
+  is_container_environment
 }
 
 # Configuration file management
@@ -253,7 +258,7 @@ EOF
   fi
 }
 
-# Auto-load settings when utils is sourced (host mode only)
-if ! is_ccc_container; then
+# Auto-load settings for host-side execution only.
+if ! is_container_environment; then
   load_settings
 fi

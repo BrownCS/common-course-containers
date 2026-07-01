@@ -9,6 +9,22 @@ mkdir -p "$tmpdir/bin" "$tmpdir/home"
 cat >"$tmpdir/bin/podman" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [ "$1" = "container" ] && [ "$2" = "exists" ]; then
+  exit 1
+fi
+if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
+  exit 0
+fi
+if [ "$1" = "network" ] && [ "$2" = "create" ]; then
+  exit 0
+fi
+if [ "$1" = "run" ]; then
+  exit 0
+fi
+if [ "$1" = "inspect" ]; then
+  echo "running"
+  exit 0
+fi
 exit 0
 EOF
 chmod +x "$tmpdir/bin/podman"
@@ -45,8 +61,9 @@ if [ "$rc" -ne 0 ]; then
   exit 1
 fi
 
-if grep -q "VOLUME_PATH: unbound variable" "$tmpdir/out.log"; then
-  echo "FAIL: unbound variable for VOLUME_PATH" >&2
+if ! grep -q -- "--volume $CCC_COURSES_DIR:/courses" "$tmpdir/out.log"; then
+  cat "$tmpdir/out.log" >&2
+  echo "FAIL: container startup did not mount the courses directory" >&2
   exit 1
 fi
 

@@ -6,6 +6,7 @@ set -eu
 
 COURSE_ROOT=${1:-/opt/course}
 SETUP_DIR="$COURSE_ROOT/setup"
+INSTALLER_CACHE_FILE="$COURSE_ROOT/.ccc-installer-ran"
 PACKAGES_FILE="$SETUP_DIR/packages.txt"
 LINKS_FILE="$SETUP_DIR/links.txt"
 ENV_FILE="$SETUP_DIR/env.txt"
@@ -15,7 +16,15 @@ LINKS_MANIFEST="$SETUP_DIR/links.manifest"
 APPLIED_ENV="$SETUP_DIR/applied-env.txt"
 
 mkdir -p "$SETUP_DIR"
+if [ -f "$INSTALLER_CACHE_FILE" ]; then
+  exit 0
+fi
 : > "$LOG_FILE"
+
+if [ ! -f "$PACKAGES_FILE" ] && [ ! -f "$LINKS_FILE" ] && [ ! -f "$ENV_FILE" ]; then
+  : > "$INSTALLER_CACHE_FILE"
+  exit 0
+fi
 
 log() {
   printf "%s\n" "$1" >> "$LOG_FILE"
@@ -164,4 +173,5 @@ fi
 log "Environment applied; file at $COURSE_ROOT/env/course.env"
 
 log "Installer finished successfully"
+: > "$INSTALLER_CACHE_FILE"
 exit 0
