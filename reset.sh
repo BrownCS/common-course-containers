@@ -11,18 +11,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$SCRIPT_DIR/lib/utils.sh"
 
-if [[ -f "$SCRIPT_DIR/lib/container.sh" ]]; then
-    source "$SCRIPT_DIR/lib/container.sh"
+if [[ -f "$SCRIPT_DIR/lib/container_helpers.sh" ]]; then
+    source "$SCRIPT_DIR/lib/container_helpers.sh"
 else
-    # Fallback container runtime detection
-    detect_container_runtime() {
-    if command -v podman >/dev/null 2>&1; then
-        echo "podman"
-    else
-        log_error "Please install podman to use CCC: https://podman.io"
-        exit 1
-    fi
-    }
+    log_error "Missing lib/container_helpers.sh"
+    exit 1
 fi
 
 # Detect container runtime

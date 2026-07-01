@@ -10,46 +10,28 @@ NETWORK_NAME="$CCC_NETWORK_NAME"
 REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
 CONTAINER_RUNTIME="podman"
 
-ARCH="$(uname -m)"
-if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-  PLATFORM="linux/arm64"
+# Load shared mode helpers
+if [[ -f "$SCRIPT_DIR/lib/mode_helpers.sh" ]]; then
+  # shellcheck disable=SC1090
+  . "$SCRIPT_DIR/lib/mode_helpers.sh"
+  detect_arch_platform
 else
-  PLATFORM="linux/amd64"
+  ARCH="$(uname -m)"
+  if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+    PLATFORM="linux/arm64"
+  else
+    PLATFORM="linux/amd64"
+  fi
 fi
 
 get_base_dir() {
-  if [[ -n "${CCC_COURSES_DIR:-}" ]]; then
-    echo "$CCC_COURSES_DIR"
-    return
-  fi
-
-  local courses_dir="$(load_courses_dir)"
-  if [[ -n "$courses_dir" ]]; then
-    echo "$courses_dir"
-    return
-  fi
-
-  echo_error "No courses directory configured"
-  echo "Run 'ccc init' in the directory where you want to store courses"
-  echo "Current config file: $(get_config_file)"
-  exit 1
+  mode_get_base_dir_host || exit 1
 }
 
 init() {
   local courses_dir
   courses_dir="$(get_base_dir)"
-
-  if [[ ! -d "$courses_dir" ]]; then
-    echo_error "Courses directory does not exist: $courses_dir"
-    echo "Run 'ccc init' to set up your courses directory"
-    exit 1
-  fi
-
-  if [[ "$courses_dir" == "/home/"*"/courses" ]] && ! mountpoint -q "$courses_dir" 2>/dev/null; then
-    echo_error "$courses_dir is not a mountpoint. Are you running inside the container?"
-    echo "If you're on the host, try: ccc run"
-    exit 1
-  fi
+  mode_init_host "$courses_dir" || exit 1
 }
 
 init_courses_dir() {

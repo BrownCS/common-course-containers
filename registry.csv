@@ -1,11 +1,13 @@
 # Common Course Containers - Local Course Registry
-# Format: course_id,repository_url,course_name,semester[,base_image]
+# Format (required columns): id,repo_url,name,semester,requires_container,image_mode,image_ref,container_arch,default_branch,notes
+# image_mode must be either default or course-specific
+# If image_mode=course-specific, image_ref must be provided
+# container_arch may be empty for native-arch default, or set to amd64/arm64
 # Lines starting with # are comments
-# base_image is optional - if empty, uses default shared container
 
-default,,Default Container,always,
-csci-0300-demo,https://github.com/qiaochloe/csci-0300-demo.git,Systems Programming,fall2024,
-csci-1680-demo,https://github.com/qiaochloe/csci-1680-demo.git,Computer Networks,spring2025,
-csci-1680-demo2,https://github.com/qiaochloe/csci-1680-demo.git,Computer Networks,spring2024,ubuntu:jammy
-example,https://github.com/qiaochloe/example-course-repo.git,Example Course,demo,
+default,,Default Container,always,true,default,,,,
+csci-0300-demo,https://github.com/qiaochloe/csci-0300-demo.git,Systems Programming,fall2024,true,default,,,,
+csci-1680-demo,https://github.com/qiaochloe/csci-1680-demo.git,Computer Networks,spring2025,true,default,,,,
+csci-1680-demo2,https://github.com/qiaochloe/csci-1680-demo.git,Computer Networks,spring2024,true,course-specific,ubuntu:jammy,arm64,,
+example,https://github.com/qiaochloe/example-course-repo.git,Example Course,demo,true,default,,,,
 

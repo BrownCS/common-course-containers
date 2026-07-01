@@ -3,27 +3,36 @@ set -euo pipefail
 
 # Course and registry management utilities
 
-get_course_info() {
-  local course="$1"
-  local field="${2:-url}"  # url, base_image, name, semester, or all
-
+require_registry_file() {
   if [[ ! -f "$REGISTRY_FILE" ]]; then
     echo_error "Registry file not found: $REGISTRY_FILE"
     return 1
   fi
+}
+
+get_course_info() {
+  local course="$1"
+  local field="${2:-url}"  # url, name, semester, requires_container, image_mode, image_ref, container_arch, default_branch, notes, or all
+
+  require_registry_file || return 1
 
   # Parse CSV, skip comments and empty lines
-  while IFS=',' read -r course_id repo_url name semester base_image; do
+  while IFS=',' read -r course_id repo_url name semester requires_container image_mode image_ref container_arch default_branch notes; do
     # Skip comments and empty lines
     [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
 
     if [[ "$course_id" == "$course" ]]; then
       case "$field" in
         url) echo "$repo_url" ;;
-        base_image) echo "${base_image:-default}" ;;
         name) echo "$name" ;;
         semester) echo "$semester" ;;
-        all) echo "$course_id,$repo_url,$name,$semester,${base_image:-default}" ;;
+        requires_container) echo "${requires_container:-true}" ;;
+        image_mode) echo "${image_mode:-default}" ;;
+        image_ref) echo "${image_ref:-}" ;;
+        container_arch) echo "${container_arch:-}" ;;
+        default_branch) echo "${default_branch:-}" ;;
+        notes) echo "${notes:-}" ;;
+        all) echo "$course_id,$repo_url,$name,$semester,${requires_container:-true},${image_mode:-default},${image_ref:-},${container_arch:-},${default_branch:-},${notes:-}" ;;
         *) echo_error "Invalid field: $field"; return 1 ;;
       esac
       return 0
@@ -33,229 +42,78 @@ get_course_info() {
   return 1
 }
 
-get_course_url() {
-  get_course_info "$1" "url"
+get_course_requires_container() {
+  get_course_info "$1" "requires_container"
 }
 
-get_course_base_image() {
-  get_course_info "$1" "base_image"
+get_course_image_mode() {
+  get_course_info "$1" "image_mode"
 }
 
-list_available_courses() {
-  if [[ ! -f "$REGISTRY_FILE" ]]; then
-    echo_error "Registry file not found: $REGISTRY_FILE"
+get_course_image_ref() {
+  get_course_info "$1" "image_ref"
+}
+
+get_course_container_arch() {
+  get_course_info "$1" "container_arch"
+}
+
+get_course_container_platform() {
+  local arch
+  arch="$(get_course_container_arch "$1")" || arch=""
+  case "$arch" in
+    arm64|amd64)
+      echo "linux/$arch"
+      ;;
+    linux/arm64|linux/amd64)
+      echo "$arch"
+      ;;
+    *)
+      case "$(uname -m)" in
+        arm64|aarch64) echo "linux/arm64" ;;
+        *) echo "linux/amd64" ;;
+      esac
+      ;;
+  esac
+}
+
+get_course_build_base_image() {
+  local mode ref
+  mode="$(get_course_image_mode "$1")" || mode="default"
+  ref="$(get_course_image_ref "$1")" || ref=""
+  if [[ "$mode" == "course-specific" && -n "$ref" ]]; then
+    echo "$ref"
+  elif [[ "$mode" == "course-specific" ]]; then
+    echo_error "Course-specific image requested for '$1' but no image_ref was set in the registry"
+    return 1
+  else
+    echo "$CCC_DEFAULT_BASE_IMAGE"
+  fi
+}
+
+ensure_course_exists() {
+  local course="$1"
+  if [[ -z "$course" ]]; then
+    echo_error "No course specified"
+    list_available_courses
     return 1
   fi
 
+  if ! get_course_info "$course" "url" >/dev/null 2>&1; then
+    echo_error "Course '$course' not found in registry"
+    list_available_courses
+    return 1
+  fi
+}
+
+list_available_courses() {
+  require_registry_file || return 1
+
   echo "Available courses:"
-  while IFS=',' read -r course_id repo_url name semester base_image; do
+  while IFS=',' read -r course_id repo_url name semester requires_container image_mode image_ref container_arch default_branch notes; do
     # Skip comments and empty lines
     [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
     echo "  $course_id"
   done < "$REGISTRY_FILE"
 }
 
-find_course() {
-  local course_url="$1"
-
-  if [[ ! -f "$REGISTRY_FILE" ]]; then
-    return 1
-  fi
-
-  # Parse CSV to find course by URL (can't use get_course_info since we're searching by URL)
-  while IFS=',' read -r course_id repo_url name semester base_image; do
-    # Skip comments and empty lines
-    [[ "$course_id" =~ ^#.*$ || -z "$course_id" ]] && continue
-
-    if [[ "$repo_url" == "$course_url" ]]; then
-      echo "$course_id"
-      return 0
-    fi
-  done < "$REGISTRY_FILE"
-
-  return 1
-}
-
-get_git_url() {
-  local dirpath="$1"
-  local url
-  url=$(git -C "$dirpath" remote get-url origin 2>/dev/null) || return 1
-
-  if [[ "$url" =~ ^git@([^:]+):(.+)$ ]]; then
-    echo "https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
-  else
-    echo "$url"
-  fi
-}
-
-get_git_commit() {
-  local dirpath="$1"
-  git -C "$dirpath" rev-parse HEAD 2>/dev/null
-}
-
-clone_course() {
-  local course="$1"
-  local courses_dir="$2"
-
-  if [[ "$course" == "default" ]]; then
-    return 0
-  fi
-
-  local course_url
-  course_url="$(get_course_url "$course")"
-
-  if [[ -z "$course_url" ]]; then
-    log_error "Could not find repository URL for '$course'"
-    list_available_courses
-    return 1
-  fi
-
-  local dirpath="$courses_dir/$course"
-
-  if [[ ! -d "$dirpath" ]]; then
-    echo "Cloning course repository..."
-    echo_and_run git clone "$course_url" "$dirpath"
-  else
-    echo "Course directory already exists: $dirpath"
-    echo "Updating repository..."
-    echo_and_run git -C "$dirpath" pull
-  fi
-
-  add_course_context "$course" "$dirpath"
-}
-
-# Clone repo outside of the container and run setup.sh inside the container
-setup_course() {
-  local course="$1"
-
-  # Handle special case for default course
-  if [[ "$course" == "default" ]]; then
-    echo "Default container setup complete!"
-    echo "You are now in the base CCC container environment."
-    echo "To install a specific course, use: ccc setup <course-name>"
-    return 0
-  fi
-
-  local course_url
-  course_url="$(get_course_url "$course")" || true
-
-  local courses_dir="$(get_base_dir)"
-  local dirpath="$courses_dir/$course"
-  local script="$dirpath/setup.sh"
-
-  if [[ -z "$course_url" ]]; then
-    echo_error "ERROR: Could not find remote course repository for '$course'"
-    echo "(1) To install a course repository manually, run: "
-    echo "       git clone <course-url>"
-    echo "       chmod +x $script"
-    echo "       bash $script"
-    echo "(2) To add a new course to ccc, email problem@cs.brown.edu"
-    echo "    with the <course> and the <course-url>"
-    echo "(3) To modify the course registry locally during development,"
-    echo "    edit the registry file at $REGISTRY_FILE"
-    list_available_courses
-    exit 1
-  fi
-
-  if [[ ! -d "$dirpath" ]]; then
-    echo_and_run git clone "$course_url" "$dirpath"
-  else
-    echo "Course directory already exists, updating..."
-    echo_and_run git -C "$dirpath" pull
-  fi
-
-  cd "$dirpath"
-
-  if [[ ! -f "$script" ]]; then
-    echo_error "WARNING: No setup.sh found in $dirpath"
-    echo "         Check with course staff if there should be a setup script for the course"
-    echo "         Continuing without running setup script..."
-    return 0
-  fi
-
-  echo_and_run sudo apt-get update -y
-  echo_and_run chmod +x "$script"
-  yes | sudo bash "$script"
-
-  # Add course context information to .envrc
-  add_course_context "$course" "$dirpath"
-}
-
-list_courses() {
-  local tmp courses_dir dirpath course_url course commit
-  tmp=$(mktemp)
-  echo "BASENAME,COURSE,COURSE_REPO,COMMIT" >"$tmp"
-
-  courses_dir="$(get_base_dir)"
-
-  for dirpath in "$courses_dir"/*/; do
-    [[ ! -d "$dirpath" ]] && continue
-    course_url="$(get_git_url "$dirpath")" || continue
-    course="$(find_course "$course_url")" || continue
-    commit="$(get_git_commit "$dirpath")" || continue
-    echo "$(basename "$dirpath"),$course,$course_url,$commit" >>"$tmp"
-  done
-
-  column -s, -t <"$tmp"
-  rm -f "$tmp"
-}
-
-upgrade_course() {
-  local course="$1"
-  local dirpath="$(get_base_dir)/$course"
-
-  if [[ ! -d "$dirpath/.git" ]]; then
-    log_error "'$dirpath' is not a git repository"
-    return 1
-  fi
-
-  echo_and_run git -C "$dirpath" pull
-}
-
-handle_container_switching() {
-  local target_course="$1"
-
-  # Validate target course exists in registry
-  if ! get_course_url "$target_course" >/dev/null 2>&1; then
-    echo_error "ERROR: Course '$target_course' not found in registry"
-    list_available_courses
-    return 1
-  fi
-
-  echo_error "ERROR: Cannot switch containers from inside container"
-  echo "You are currently inside a container. To switch to '$target_course':"
-  echo ""
-  echo "1. Exit this container:"
-  echo "   exit"
-  echo ""
-  echo "2. Run the target course from the host:"
-  echo "   ccc run $target_course"
-  echo ""
-  echo "This will start the appropriate container for '$target_course'."
-}
-
-add_course_context() {
-  local course="$1"
-  local dirpath="$2"
-  local envrc_file="$dirpath/.envrc"
-
-  # Check if .envrc already has course context
-  if [[ -f "$envrc_file" ]] && grep -q "CCC_EXPECTED_COURSE" "$envrc_file"; then
-    echo "Course context already exists in .envrc"
-    return 0
-  fi
-
-  # Add course context to .envrc
-  echo "Adding course context information to .envrc..."
-  cat >> "$envrc_file" << EOF
-
-# Course context information added by CCC
-export CCC_EXPECTED_COURSE="$course"
-
-# Optional: Show context info when entering directory
-# Uncomment the next line to see course info when entering directory
-# echo "Entered course directory: $course"
-EOF
-
-  echo "Course context added to $envrc_file"
-}

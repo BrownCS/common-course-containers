@@ -119,7 +119,7 @@ Add `setup.sh` for one-time course setup:
 
 Students will:
 1. `ccc setup your-course` (downloads your repo)
-2. `cd courses/your-course` (direnv loads environment)
+2. `ccc open your-course` (opens the course shell with environment applied)
 3. Work in assignment folders (`hw1/`, `project2/`, etc.)
 4. Use your custom commands/aliases
 
@@ -127,10 +127,8 @@ Students will:
 
 Test your setup:
 ```bash
-# Test direnv
-cd courses/your-course
-direnv allow
-echo $PATH  # Should show ./bin
+# Test CCC environment loading
+ccc open your-course
 
 # Test container
 ccc run your-course

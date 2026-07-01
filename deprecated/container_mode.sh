@@ -5,8 +5,22 @@ set -euo pipefail
 
 BASE_DIR="${CCC_COURSES_BASE_DIR:-/courses}"
 
+# Load shared mode helpers if present
+if [[ -f "$SCRIPT_DIR/lib/mode_helpers.sh" ]]; then
+  # shellcheck disable=SC1090
+  . "$SCRIPT_DIR/lib/mode_helpers.sh"
+  detect_arch_platform
+else
+  ARCH="$(uname -m)"
+  if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+    PLATFORM="linux/arm64"
+  else
+    PLATFORM="linux/amd64"
+  fi
+fi
+
 get_base_dir() {
-  echo "$BASE_DIR"
+  mode_get_base_dir_container
 }
 
 # Settings are passed as environment variables from host
@@ -22,18 +36,7 @@ REGISTRY_FILE="$SCRIPT_DIR/registry.csv"
 
 # Container initialization
 init() {
-  # Base directory should exist and be mounted
-  if [[ ! -d "$BASE_DIR" ]]; then
-    echo_error "Courses directory does not exist: $BASE_DIR"
-    echo "This script should be run inside the container where $BASE_DIR is mounted"
-    exit 1
-  fi
-
-  # Check if it's mounted (container-specific check)
-  if ! mountpoint -q "$BASE_DIR" 2>/dev/null; then
-    echo_error "$BASE_DIR is not a mountpoint. Are you running inside the container?"
-    exit 1
-  fi
+  mode_init_container || exit 1
 }
 
 # Container usage
@@ -83,6 +86,7 @@ container_main() {
 
   # ccc run <course> - container switching
   if [[ "$#" -eq 2 && "$1" == "run" ]]; then
+  
     handle_container_switching "$2"
     exit 0
   fi

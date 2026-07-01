@@ -1,0 +1,278 @@
+#!/usr/bin/env sh
+# Unified open flow for CCC (local and container)
+# Functions:
+#  - ccc_open <course_id> [--local] [--no-shell]
+
+## NOTE: `lib/open.sh` is a small orchestrator expected to be sourced by
+## `ccc.sh`. `ccc.sh` should set `SCRIPT_DIR` and pre-load core libraries
+## (utils, config, registry, courses, runtime). This file intentionally
+## avoids re-sourcing those libraries to stay minimal.
+
+
+get_session_file() {
+    cfgdir=$(resolve_config_dir) || return 1
+    echo "$cfgdir/session.json"
+}
+
+write_session() {
+    course=$1
+    container_id=${2:-}
+    pid=${3:-}
+    start_time=$(date --iso-8601=seconds 2>/dev/null || date +%s)
+    session_file=$(get_session_file) || return 1
+    printf '{"course":"%s","container_id":"%s","pid":"%s","start":"%s"}\n' "$course" "$container_id" "$pid" "$start_time" >"$session_file"
+    chmod 600 "$session_file" 2>/dev/null || true
+}
+
+clear_session() {
+    session_file=$(get_session_file 2>/dev/null || true)
+    if [ -n "$session_file" ]; then
+        rm -f "$session_file" 2>/dev/null || true
+    fi
+}
+
+ccc_cleanup_environment() {
+    reason=${1:-shell-exit}
+    exit_code=${2:-0}
+    clear_session
+    export CCC_MANAGED_ENV=false
+    if [ "$reason" != "shell-exit" ]; then
+        echo "Cleaning up stale course environment ($reason)" >&2
+    fi
+    return "$exit_code"
+}
+
+is_managed_environment() {
+    if [ "${CCC_MANAGED_ENV:-}" = "true" ]; then
+        return 0
+    fi
+    return 1
+}
+
+ccd_clone_if_missing() {
+    course_id="$1"
+    course_dir="$2"
+    entry=$(registry_lookup "$course_id") || true
+    repo_url=$(printf '%s' "$entry" | awk -F',' '{print $2}')
+    if [ ! -d "$course_dir" ]; then
+        if [ -n "$repo_url" ]; then
+            echo "Cloning $repo_url -> $course_dir"
+            if command -v git >/dev/null 2>&1; then
+                git clone "$repo_url" "$course_dir" || { echo "git clone failed" >&2; return 3; }
+            else
+                echo "git not found; cannot clone course" >&2
+                return 4
+            fi
+        else
+            echo "Creating course directory for $course_id at $course_dir"
+            mkdir -p "$course_dir" || return 5
+        fi
+    fi
+}
+
+stop_container_for_course() {
+    course_id="$1"
+    if [ -z "${course_id:-}" ]; then
+        return 0
+    fi
+
+    container_name="$(get_container_name "$course_id")"
+    if [ -z "${container_name:-}" ]; then
+        return 0
+    fi
+
+    if command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 2>/dev/null; then
+        :
+    fi
+
+    if [ -n "${CONTAINER_RUNTIME:-}" ]; then
+        if "$CONTAINER_RUNTIME" container exists "$container_name" >/dev/null 2>&1; then
+            "$CONTAINER_RUNTIME" stop "$container_name" >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
+start_container_for_course() {
+    course_id="$1"
+
+    # Determine image/container names
+    CONTAINER_RUNTIME=$(detect_container_runtime) || return 2
+    NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
+
+    # Ensure image/container name defaults exist so runtime helpers don't hit
+    # unbound-variable errors
+    CCC_IMAGE_PREFIX="${CCC_IMAGE_PREFIX:-ccc}"
+    IMAGE_NAME="${IMAGE_NAME:-$CCC_IMAGE_PREFIX}"
+    CONTAINER_NAME="$(get_container_name "$course_id")"
+
+    # Determine architecture/platform, defaulting to the machine architecture
+    PLATFORM="$(get_course_container_platform "$course_id")"
+    case "$PLATFORM" in
+      linux/arm64) ARCH="arm64" ;;
+      linux/amd64) ARCH="amd64" ;;
+      *) ARCH="$(uname -m)" ;;
+    esac
+
+    # Build or pull image based on registry image mode
+    base_image=$(get_course_build_base_image "$course_id") || base_image="$CCC_DEFAULT_BASE_IMAGE"
+    image_name="$(get_image_name "$course_id")"
+
+    build_image "$base_image" "$image_name" || return 3
+
+    CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
+    start_new_container
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "Failed to start container" >&2
+        return $rc
+    fi
+    return 0
+}
+
+ccc_open() {
+    course_id="$1"
+    shift || true
+    mode="local"
+    no_shell=false
+    while [ "${1:-}" != "" ]; do
+        case "$1" in
+            --local) mode="local"; shift ;;
+            --no-shell) no_shell=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    if [ -z "$course_id" ]; then
+        echo "Usage: ccc open <course> [--local] [--no-shell]" >&2
+        return 2
+    fi
+
+    course_dir="$CCC_COURSES_DIR/$course_id"
+    mkdir -p "$CCC_COURSES_DIR" || return 1
+
+    # Ensure course exists in registry
+    ensure_course_exists "$course_id" || return 1
+
+    # Clone if missing
+    ccd_clone_if_missing "$course_id" "$course_dir" || return $?
+
+    if is_managed_environment; then
+        echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
+        return 1
+    fi
+
+    # Detect whether the registry says this course requires a container.
+    requires=$(get_course_requires_container "$course_id") || requires="true"
+    if [ "$requires" != "true" ]; then
+        mode="local"
+    elif is_container_environment; then
+        mode="container"
+    else
+        mode="container"
+    fi
+
+    if [ "$mode" = "local" ]; then
+        # Local mode only opens the course directory and session; standardized
+        # course setup is handled by the installer/manifests in container mode.
+        export CCC_MANAGED_ENV=true
+        write_session "$course_id" "" "$$"
+        if [ "$no_shell" = "true" ]; then
+            echo "Opened $course_id (local, no-shell)"
+            return 0
+        fi
+        echo "Entering local course directory: $course_dir"
+        cd "$course_dir" || return 1
+        "$SHELL" --login
+        rc=$?
+        ccc_cleanup_environment "shell-exit" "$rc"
+        return "$rc"
+    else
+        # Container path: if we are already inside a CCC container, reuse the
+        # current environment instead of trying to start a nested container.
+        if is_container_environment; then
+            CONTAINER_NAME="$(hostname 2>/dev/null || echo "ccc-container")"
+            CONTAINER_RUNTIME=""
+            CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
+            echo "Using current container environment: $CONTAINER_NAME"
+        else
+            # Host path: start the container first, then run the standardized
+            # course installer inside the running container.
+            if [ -t 0 ] && [ -t 1 ]; then
+                printf 'This course will be run in a container. Start container now? [Y/n] '
+                read -r ans
+            else
+                ans='y'
+            fi
+            case "$ans" in
+                [nN]|[nN][oO])
+                    echo "Aborting: container start declined"
+                    return 1
+                    ;;
+                *)
+                    ;;
+            esac
+
+            start_container_for_course "$course_id" || return $?
+        fi
+
+        # Ensure runtime vars are set by start_container_for_course
+        CONTAINER_NAME="${CONTAINER_NAME:-$(hostname 2>/dev/null || echo "$course_id")}" 
+        export CCC_MANAGED_ENV=true
+        host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
+        container_course_dir="/courses/$course_id"
+        mkdir -p "$host_course_dir" 2>/dev/null || true
+        write_session "$course_id" "$CONTAINER_NAME" ""
+
+        # Use a fixed internal installer location that is independent of the
+        # course repository layout. The installer reads
+        # `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
+        INSTALLER_PATH="/usr/local/share/ccc/course_installer.sh"
+        host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
+        container_course_dir="${CONTAINER_WORKDIR:-/courses/$course_id}"
+        INSTALLER_CACHE_FILE="$host_course_dir/.ccc-installer-ran"
+        echo "Running course installer inside container: $CONTAINER_NAME"
+        if is_container_environment; then
+            if [ -x "$INSTALLER_PATH" ]; then
+                if [ -f "$INSTALLER_CACHE_FILE" ]; then
+                    echo "Installer already ran for $container_course_dir; skipping"
+                else
+                    "$INSTALLER_PATH" "$container_course_dir" || return $?
+                    : > "$INSTALLER_CACHE_FILE"
+                fi
+            else
+                echo "Installer not found at $INSTALLER_PATH" >&2
+                return 2
+            fi
+        else
+            "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then if [ -f '$container_course_dir/.ccc-installer-ran' ]; then echo 'Installer already ran for $container_course_dir; skipping'; else '$INSTALLER_PATH' '$container_course_dir' && : > '$container_course_dir/.ccc-installer-ran'; fi; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+                return "$rc"
+            fi
+        fi
+
+        if [ "$no_shell" = "true" ]; then
+            echo "Opened $course_id (container, no-shell)"
+            return 0
+        fi
+
+        if is_container_environment; then
+            echo "Using existing container shell"
+            "$SHELL" --login
+            rc=$?
+            ccc_cleanup_environment "shell-exit" "$rc"
+            return "$rc"
+        fi
+
+        echo "Attaching to container: $CONTAINER_NAME"
+        if [ -t 0 ] && [ -t 1 ]; then
+            "$CONTAINER_RUNTIME" exec -it -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "mkdir -p '/courses/$course_id' && export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l"
+            rc=$?
+        else
+            "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "mkdir -p '/courses/$course_id' && export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l"
+            rc=$?
+        fi
+        ccc_cleanup_environment "shell-exit" "$rc"
+        return "$rc"
+    fi
+}

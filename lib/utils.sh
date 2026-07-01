@@ -39,8 +39,13 @@ log_error() {
 }
 
 # Container detection
-is_ccc_container() {
+is_container_environment() {
   [[ -f /etc/ccc-container ]]
+}
+
+# Backward-compatible wrapper for older callers.
+is_ccc_container() {
+  is_container_environment
 }
 
 # Configuration file management
@@ -65,7 +70,7 @@ save_courses_dir() {
   mkdir -p "$config_dir"
 
   # Convert to absolute path
-  courses_dir="$(realpath "$courses_dir")"
+  courses_dir="$(realpath "$courses_dir")" # is realpath available to every system?
 
   # Save to config file
   echo "COURSES_DIR=$courses_dir" >"$config_file"
@@ -253,7 +258,7 @@ EOF
   fi
 }
 
-# Auto-load settings when utils is sourced (host mode only)
-if ! is_ccc_container; then
+# Auto-load settings for host-side execution only.
+if ! is_container_environment; then
   load_settings
 fi

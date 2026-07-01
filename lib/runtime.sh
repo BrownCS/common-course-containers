@@ -5,17 +5,20 @@ set -euo pipefail
 
 get_container_name() {
   local course="${1:-}"
-  if [[ -z "$course" ]]; then
-    echo "$CONTAINER_NAME"
-    return
+  # Return a deterministic container name. If a course is provided, use the
+  # image prefix plus the course id. Otherwise fall back to an explicit
+  # CONTAINER_NAME if set, or the image prefix.
+  local prefix="${CCC_IMAGE_PREFIX:-ccc}"
+  if [[ -n "$course" ]]; then
+    echo "${prefix}-${course}"
+    return 0
   fi
 
-  local base_image
-  base_image="$(get_course_base_image "$course")"
-  if [[ "$base_image" == "default" || -z "$base_image" ]]; then
-    echo "$CONTAINER_NAME"
+  # No course provided: prefer explicit CONTAINER_NAME, else the prefix.
+  if [[ -n "${CONTAINER_NAME:-}" ]]; then
+    echo "${CONTAINER_NAME}"
   else
-    echo "ccc-$(echo "$base_image" | tr ':' '-')"
+    echo "${prefix}"
   fi
 }
 
@@ -26,13 +29,26 @@ get_image_name() {
     return
   fi
 
-  local base_image
-  base_image="$(get_course_base_image "$course")"
-  if [[ "$base_image" == "default" || -z "$base_image" ]]; then
-    echo "$IMAGE_NAME"
+  local image_mode
+  image_mode="$(get_course_image_mode "$course")"
+  if [[ "$image_mode" == "course-specific" ]]; then
+    echo "ccc-${course}"
   else
-    echo "ccc:$(echo "$base_image" | tr ':' '-')"
+    echo "$IMAGE_NAME"
   fi
+}
+
+get_course_platform() {
+  local course="${1:-}"
+  if [[ -z "$course" ]]; then
+    case "$(uname -m)" in
+      arm64|aarch64) echo "linux/arm64" ;;
+      *) echo "linux/amd64" ;;
+    esac
+    return
+  fi
+
+  get_course_container_platform "$course"
 }
 
 check_container_runtime() {
@@ -75,43 +91,34 @@ show_course_status() {
 }
 
 build_course_image() {
+  echo "building course"
   local course="${1:-}"
   local iname
   iname="$(get_image_name "$course")"
 
   local base_image
-  base_image="$(get_course_base_image "$course")"
-  if [[ "$base_image" == "default" || -z "$base_image" ]]; then
-    base_image="$CCC_DEFAULT_BASE_IMAGE"
-  fi
+  base_image="$(get_course_build_base_image "$course")"
 
   build_image "$base_image" "$iname"
 }
 
 # Enter (or create) a container for a course.
-# Pass --setup to run the course's setup.sh inside the container.
+# The standardized course installer is handled by the caller.
 enter_course() {
+  echo "ENTERING COURSE"
   local course="$1"
-  local run_setup=false
-  [[ "${2:-}" == "--setup" ]] && run_setup=true
-
   local cname iname course_workdir
   cname="$(get_container_name "$course")"
   iname="$(get_image_name "$course")"
   course_workdir="$CCC_MOUNT_PATH"
   echo "CCC_MOUNT_PATH=${CCC_MOUNT_PATH:-<unset>}"
   [[ "$course" != "default" ]] && course_workdir="$CCC_MOUNT_PATH/$course"
-
+  echo "testing log"
   check_container_runtime
   log_info "Course: $course"
   show_course_status "$course"
   build_course_image "$course"
-
-  local startup_cmd=""
-  if $run_setup && [[ "$course" != "default" ]] && [[ -f "$VOLUME_PATH/$course/setup.sh" ]]; then
-    startup_cmd="cd '$course_workdir' && sudo apt-get update -y && sudo bash setup.sh"
-  fi
-
+  echo "made it there"
   if has_container "$course"; then
     local status
     status=$("$CONTAINER_RUNTIME" inspect -f '{{.State.Status}}' "$cname")
@@ -121,12 +128,11 @@ enter_course() {
     fi
 
     local cmd="cd '$course_workdir' && exec bash"
-    [[ -n "$startup_cmd" ]] && cmd="$startup_cmd; exec bash"
     echo_and_run "$CONTAINER_RUNTIME" exec -it "$cname" bash -c "$cmd"
   else
     CONTAINER_NAME="$cname"
     IMAGE_NAME="$iname"
     CONTAINER_WORKDIR="$course_workdir"
-    start_new_container "$startup_cmd"
+    start_new_container
   fi
 }
