@@ -5,7 +5,8 @@
 - Milestones 1-2 are effectively complete: config/registry basics and the top-level CLI dispatcher are in place.
 - Milestone 3 is mostly complete: `ccc open` exists, course directories are managed separately, and sessions are tracked.
 - Milestone 4 is the main in-progress area: container flow is registry-driven and uses the standardized course installer manifests.
-- Milestones 5-8 are still ahead of us.
+- Milestone 5 is partially reframed: user-facing `ccc close` is no longer the goal; cleanup should happen automatically when the user exits the shell.
+- Milestones 6-8 are still ahead of us.
 
 ## Current design decisions
 
@@ -15,6 +16,7 @@
 - `ccc open` should not require user-facing flags for the core flow.
 - `direnv` is no longer part of the design.
 - The old host-mode-vs-container-mode split is being collapsed into one registry-driven `ccc open` flow.
+- There is no user-facing `ccc close` command in the intended workflow; the shell exit path is responsible for cleanup.
 
 ## Installation and location
 
@@ -38,7 +40,7 @@ The command is a single `ccc open [course]` flow. It works like this:
 
 ## Closing or switching courses
 
-Closing a course should exit the current shell and, if needed, leave the container. Switching courses should close the current one and then open the new course.
+Closing a course should happen when the user exits the shell. Cleanup should remove session state and clear the managed-environment marker automatically. Switching courses should close the current one, clean it up, and then open the new course.
 
 ## Cleanup and advanced commands
 
@@ -89,10 +91,11 @@ This tool is no longer something that always starts a container. Some courses wi
 - Run the standardized course installer inside the container.
 - Keep containers ephemeral by default, with reuse controlled in config.
 
-### Milestone 5 - `ccc close`, `ccc remove`, `ccc uninstall`
-- Terminate sessions cleanly.
-- Remove CCC-managed containers/images/networks.
-- Uninstall CCC-managed files.
+### Milestone 5 - Exit-based cleanup and lifecycle handling
+- Terminate sessions cleanly when the shell exits.
+- Clear managed-environment state automatically on exit.
+- Remove CCC-managed containers/images/networks through explicit cleanup commands, not `ccc close`.
+- Preserve compatibility with any legacy references only where needed for transition.
 
 ### Milestone 6 - Update checks and UX polish
 - Define update policy for git-installed vs packaged installs.
@@ -102,6 +105,7 @@ This tool is no longer something that always starts a container. Some courses wi
 ### Milestone 7 - Backward compatibility and cleanup
 - Remove old `setup.sh` assumptions from helper paths and documentation.
 - Remove duplicate host/container code paths.
+- Align docs and tests with the manifests-first course contract.
 
 ### Milestone 8 - Packaging
 - Packaging recipes for deb/rpm/Homebrew.
@@ -109,4 +113,4 @@ This tool is no longer something that always starts a container. Some courses wi
 
 ## Where we are now
 
-We are around Milestone 4: the open flow is registry-driven, the standardized course installer exists, and the remaining work is container polish, cleanup, and the later lifecycle commands.
+We are around Milestone 4, with some Milestone 5 behavior already starting to appear in the open/session cleanup flow. The main remaining work is container polish, exit-based cleanup, and then the later lifecycle commands.
