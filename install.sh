@@ -61,7 +61,7 @@ fi
 MAIN_SCRIPT="$BIN_DIR/ccc"
 
 # Source logging functions from utils
-source "$REPO_DIR/lib/utils.sh"
+source "$REPO_DIR/share/utils.sh"
 
 # Check permissions based on installation mode
 check_permissions() {
@@ -126,14 +126,14 @@ validate_source() {
     log_info "Validating source files..."
 
     local required_files=(
-        "ccc.sh"
-        "registry.csv"
-        "Dockerfile.template"
-        "VERSION"
+        "bin/ccc"
+        "share/registry.csv"
+        "share/VERSION"
+        "share/Dockerfile.template"
     )
 
     local required_dirs=(
-        "lib"
+        "share"
     )
 
     for file in "${required_files[@]}"; do
@@ -152,9 +152,9 @@ validate_source() {
         fi
     done
 
-    # Check that lib directory has shell scripts
-    if ! ls "$REPO_DIR/lib/"*.sh >/dev/null 2>&1; then
-        log_error "No shell scripts found in lib directory"
+    # Check that share directory has shell scripts
+    if ! ls "$REPO_DIR/share/"*.sh >/dev/null 2>&1; then
+        log_error "No shell scripts found in share directory"
         echo "Make sure you're running this script from the CCC repository root"
         exit 1
     fi
@@ -168,7 +168,6 @@ create_directories() {
 
     mkdir -p "$BIN_DIR"
     mkdir -p "$SHARE_DIR"
-    mkdir -p "$SHARE_DIR/lib"
 
     log_success "Installation directories created"
 }
@@ -177,20 +176,18 @@ create_directories() {
 install_files() {
     log_info "Installing CCC files..."
 
-    # Copy main script
-    cp "$REPO_DIR/ccc.sh" "$MAIN_SCRIPT"
+    # Copy main CLI from repo/bin to the install bin dir
+    cp "$REPO_DIR/bin/ccc" "$MAIN_SCRIPT"
     chmod +x "$MAIN_SCRIPT"
 
-    # Also copy ccc.sh to share directory for Docker build context
-    cp "$REPO_DIR/ccc.sh" "$SHARE_DIR/"
+    # Also copy the CLI into the share dir for bundle contexts
+    cp "$REPO_DIR/bin/ccc" "$SHARE_DIR/" 2>/dev/null || true
 
-    # Copy library files
-    cp "$REPO_DIR/lib/"*.sh "$SHARE_DIR/lib/"
-
-    # Copy registry, VERSION file, and Dockerfile template
-    cp "$REPO_DIR/registry.csv" "$SHARE_DIR/"
-    cp "$REPO_DIR/VERSION" "$SHARE_DIR/"
-    cp "$REPO_DIR/Dockerfile.template" "$SHARE_DIR/"
+    # Copy runtime scripts and static data from `share/`
+    cp "$REPO_DIR/share/"*.sh "$SHARE_DIR/" 2>/dev/null || true
+    cp "$REPO_DIR/share/registry.csv" "$SHARE_DIR/" 2>/dev/null || true
+    cp "$REPO_DIR/VERSION" "$SHARE_DIR/" 2>/dev/null || true
+    cp "$REPO_DIR/Dockerfile.template" "$SHARE_DIR/" 2>/dev/null || true
 
     # Script already has path detection built-in, no modification needed
 

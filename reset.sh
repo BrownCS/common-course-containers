@@ -9,12 +9,12 @@ echo "Resetting CCC development environment..."
 # Set up paths and source libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "$SCRIPT_DIR/lib/utils.sh"
+source "$SCRIPT_DIR/share/utils.sh"
 
-if [[ -f "$SCRIPT_DIR/lib/container_helpers.sh" ]]; then
-    source "$SCRIPT_DIR/lib/container_helpers.sh"
+if [[ -f "$SCRIPT_DIR/share/container_helpers.sh" ]]; then
+    source "$SCRIPT_DIR/share/container_helpers.sh"
 else
-    log_error "Missing lib/container_helpers.sh"
+    log_error "Missing share/container_helpers.sh"
     exit 1
 fi
 

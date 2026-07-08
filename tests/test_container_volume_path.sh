@@ -46,9 +46,11 @@ export IMAGE_NAME="ccc"
 export CONTAINER_WORKDIR="/courses/course"
 
 # shellcheck disable=SC1091
-source "$repo_root/lib/utils.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/container_helpers.sh"
+source "$repo_root/share/utils.sh"
+
+# shellcheck disable=SC1091
+source "$repo_root/share/container_helpers.sh"
 
 set +e
 start_new_container >"$tmpdir/out.log" 2>&1

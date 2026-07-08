@@ -2,7 +2,7 @@
 # Smoke test for ccc init (non-interactive simulation)
 set -e
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-. "$repo_root/lib/config.sh"
+. "$repo_root/share/config.sh"
 
 # Use a temp HOME to avoid clobbering real user config
 TMP_HOME="$(mktemp -d)"

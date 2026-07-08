@@ -22,17 +22,17 @@ export TMPDIR="$tmpdir"
 export PATH="$tmpdir/bin:$PATH"
 
 # shellcheck disable=SC1091
-source "$repo_root/lib/config.sh"
+source "$repo_root/share/config.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/utils.sh"
+source "$repo_root/share/utils.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/courses.sh"
+source "$repo_root/share/courses.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/container_helpers.sh"
+source "$repo_root/share/container_helpers.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/runtime.sh"
+source "$repo_root/share/runtime.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/open.sh"
+source "$repo_root/share/open.sh"
 
 ensure_course_exists() { return 0; }
 ccd_clone_if_missing() { return 0; }

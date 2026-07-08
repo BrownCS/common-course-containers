@@ -34,7 +34,7 @@ MAIN_SCRIPT="$BIN_DIR/ccc"
 
 # Source logging functions from utils
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$REPO_DIR/lib/utils.sh"
+source "$REPO_DIR/share/utils.sh"
 
 # Check permissions based on detected installation
 check_permissions() {

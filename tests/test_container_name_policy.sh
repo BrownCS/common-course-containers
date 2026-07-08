@@ -5,11 +5,13 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 export REGISTRY_FILE="$repo_root/registry.csv"
 
 # shellcheck disable=SC1091
-source "$repo_root/lib/utils.sh"
+source "$repo_root/share/utils.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/courses.sh"
 # shellcheck disable=SC1091
-source "$repo_root/lib/runtime.sh"
+source "$repo_root/share/courses.sh"
+# shellcheck disable=SC1091
+# shellcheck disable=SC1091
+source "$repo_root/share/runtime.sh"
 
 shared_container="$(get_container_name csci-0300-demo)"
 specific_container="$(get_container_name csci-1680-demo2)"

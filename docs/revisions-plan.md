@@ -72,8 +72,8 @@ This tool is no longer something that always starts a container. Some courses wi
 - Add a short developer README section describing the code layout.
 
 ### Milestone 1 - Config and registry basics
-- `lib/config.sh` for cross-platform config lookup and read/write helpers.
-- `lib/registry.sh` for registry parsing.
+- `share/config.sh` for cross-platform config lookup and read/write helpers.
+- `share/registry.sh` for registry parsing.
 - Document config keys and registry columns.
 
 ### Milestone 2 - CLI dispatcher and basic commands

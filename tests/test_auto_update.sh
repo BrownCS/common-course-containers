@@ -2,7 +2,7 @@
 # Test auto-update CLI subcommand
 set -e
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-. "$repo_root/lib/config.sh"
+. "$repo_root/share/config.sh"
 
 # Use a temp HOME
 TMP_HOME="$(mktemp -d)"

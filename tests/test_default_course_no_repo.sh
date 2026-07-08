@@ -15,7 +15,7 @@ resolve_config_dir() {
   echo "$tmpdir"
 }
 
-. "$repo_root/lib/open.sh"
+. "$repo_root/share/open.sh"
 
 course_dir="$tmpdir/default-course"
 rm -rf "$course_dir"

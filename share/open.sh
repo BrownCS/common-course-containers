@@ -3,7 +3,7 @@
 # Functions:
 #  - ccc_open <course_id> [--local] [--no-shell]
 
-## NOTE: `lib/open.sh` is a small orchestrator expected to be sourced by
+## NOTE: `share/open.sh` is a small orchestrator expected to be sourced by
 ## `ccc.sh`. `ccc.sh` should set `SCRIPT_DIR` and pre-load core libraries
 ## (utils, config, registry, courses, runtime). This file intentionally
 ## avoids re-sourcing those libraries to stay minimal.
@@ -201,6 +201,21 @@ ccc_open() {
             CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
             echo "Using current container environment: $CONTAINER_NAME"
         else
+            # Host path: ask user for consent before creating/starting a container
+            # when running interactively. If stdin is not a tty, assume yes.
+            if [ -t 0 ]; then
+                printf "Course %s requires a container. Create/start it now? [Y/n] " "$course_id"
+                read -r _ans
+                case "${_ans:-y}" in
+                    [yY]|[yY][eE][sS]|"")
+                        ;; # proceed
+                    *)
+                        echo "Aborting: container required for $course_id." >&2
+                        return 1
+                        ;;
+                esac
+            fi
+
             # Host path: start or reuse the container first, then run the
             # standardized course installer inside the running container.
             start_container_for_course "$course_id" || return $?

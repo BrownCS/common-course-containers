@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-open_file="$repo_root/lib/open.sh"
+open_file="$repo_root/share/open.sh"
 
 if grep -q 'echo "Installer not found; skipping automated setup"' "$open_file"; then
   echo "FAIL: open flow still falls back to a host-side skip message" >&2

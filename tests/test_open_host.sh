@@ -2,7 +2,7 @@
 # Smoke test for ccc open host flow (no-shell)
 set -e
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-. "$repo_root/lib/config.sh"
+. "$repo_root/share/config.sh"
 
 # Prepare temp home and courses dir
 TMP_HOME="$(mktemp -d)"

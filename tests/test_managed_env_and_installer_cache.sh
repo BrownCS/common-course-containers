@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-open_file="$repo_root/lib/open.sh"
-installer_file="$repo_root/lib/course_installer.sh"
+open_file="$repo_root/share/open.sh"
+installer_file="$repo_root/share/course_installer.sh"
 
 if ! grep -q 'export CCC_MANAGED_ENV=true' "$open_file"; then
   echo "FAIL: open flow does not set CCC_MANAGED_ENV=true on entry" >&2

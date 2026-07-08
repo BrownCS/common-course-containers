@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-open_file="$repo_root/lib/open.sh"
+open_file="$repo_root/share/open.sh"
 
 if ! grep -q 'is_managed_environment' "$open_file"; then
   echo "FAIL: open flow does not compute a managed-environment guard" >&2

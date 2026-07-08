@@ -23,11 +23,11 @@ ccc run foo      starts persistent container
 
 | File                  | Role                                                                        |
 | --------------------- | --------------------------------------------------------------------------- |
-| ccc.sh                | Entry point; dispatches to either lib/host_mode.sh or lib/container_mode.sh |
-| lib/utils.sh          | Logging, mode detection, config, and versioning utilities                   |
-| lib/courses.sh        | Courses and registry management utilities                                   |
-| lib/container_helpers.sh | Container setup utilities                                                   |
-| lib/host_mode.sh      | (removed) Host dispatcher was consolidated into `ccc.sh` and helper libs   |
-| lib/container_mode.sh | (removed) Container dispatcher was consolidated into `ccc.sh` and helper libs |
+| ccc.sh                | Entry point; dispatches to the CLI wrapper and helper scripts in `share/`    |
+| share/utils.sh        | Logging, mode detection, config, and versioning utilities                   |
+| share/courses.sh      | Courses and registry management utilities                                   |
+| share/container_helpers.sh | Container setup utilities                                                |
+| share/host_mode.sh    | (removed) Host dispatcher was consolidated into `ccc.sh` and helper libs   |
+| share/container_mode.sh | (removed) Container dispatcher was consolidated into `ccc.sh` and helper libs |
 | Dockerfile.template   | Image definition                                                            |
 | registry.csv          | Course registry                                                             |

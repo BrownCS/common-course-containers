@@ -12,9 +12,9 @@ Assuming a brand new student, who knows nothing but what is given in the README,
 
 --> checks, in order, for these dependencies: Podman and Git
 
---> validates existence of ccc.sh, registry.sh, Dockerfile.template, "VERSION" and "lib" directory
+--> validates existence of ccc.sh, registry.sh, Dockerfile.template, "VERSION" and "share" directory
 
---> copies all .sh files from /lib to $SHARE_DIR for Docker setup
+--> copies all .sh files from /share to $SHARE_DIR for Docker setup
 
 --> sets $PATH variable to include ~/.local/bin so CCC commands can be found
 
@@ -36,13 +36,13 @@ Assuming a brand new student, who knows nothing but what is given in the README,
 
 #### Files/Dependencies
 
---> install.sh, lib/utils.sh
+--> install.sh, share/utils.sh
 
 
 
 ### Step 2. ccc init
 
---> First routes to ccc.sh, which sets SCRIPT_DIR, load util functions, checks to see that user is in HOST_MODE, this loads lib/courses.sh, lib/container.sh, lib/runtime.sh, and lib/hostmode.sh.
+--> First routes to ccc.sh, which sets SCRIPT_DIR, load util functions, checks to see that user is in HOST_MODE, this loads share/courses.sh, share/container.sh, share/runtime.sh, and share/hostmode.sh.
 
 --> calls `host_main init`, which routes to host_mode.sh
 
@@ -54,19 +54,19 @@ Assuming a brand new student, who knows nothing but what is given in the README,
 
 #### Questions:
 
-1. Why do we need to load lib/courses.sh, lib/container.sh, and lib/runtime.sh if we don't use them? it seems a bit overkill.
+1. Why do we need to load share/courses.sh, share/container.sh, and share/runtime.sh if we don't use them? it seems a bit overkill.
 
 2. With that, could this be compressed into the ./install.sh function? do these even need to be a separate function at all, and just run automatically (without explicit user command)?
 
 #### Files/Dependencies
 
---> ccc.sh, lib/host_mode.sh, lib/utils.sh (unused, but loaded, lib/courses.sh, lib/container.sh, and lib/runtime.sh)
+--> ccc.sh, share/host_mode.sh, share/utils.sh (unused, but loaded, share/courses.sh, share/container.sh, and share/runtime.sh)
 
 
 
 ### Step 3. ccc setup [course name]
 
---> First routes to ccc.sh again, which re-sets SCRIPT_DIR, re-loads util functions, checks to see that user is in HOST_MODE, this re-loads lib/courses.sh, lib/container.sh, lib/runtime.sh, and lib/hostmode.sh.
+--> First routes to ccc.sh again, which re-sets SCRIPT_DIR, re-loads util functions, checks to see that user is in HOST_MODE, this re-loads share/courses.sh, share/container.sh, share/runtime.sh, and share/hostmode.sh.
 
 --> calls `host_main setup [course]`, which routes to host_mode.sh
 
@@ -107,13 +107,13 @@ Assuming a brand new student, who knows nothing but what is given in the README,
 
 #### Files/Dependencies
 
---> ccc.sh, lib/host_mode.sh, lib/utils.sh, lib/courses.sh, lib/container.sh, and lib/runtime.sh. registry.csv, Dockerfile.template
+--> ccc.sh, share/host_mode.sh, share/utils.sh, share/courses.sh, share/container.sh, and share/runtime.sh. registry.csv, Dockerfile.template
 
 
 
 ### Step 4. ccc run [course name]
 
---> First routes to ccc.sh again, which re-sets SCRIPT_DIR, re-loads util functions, checks to see that user is in HOST_MODE, this re-loads lib/courses.sh, lib/container.sh, lib/runtime.sh, and lib/hostmode.sh.
+--> First routes to ccc.sh again, which re-sets SCRIPT_DIR, re-loads util functions, checks to see that user is in HOST_MODE, this re-loads share/courses.sh, share/container.sh, share/runtime.sh, and share/hostmode.sh.
 
 --> calls `host_main run [course]`, which routes to host_mode.sh
 
@@ -140,7 +140,7 @@ Assuming a brand new student, who knows nothing but what is given in the README,
 
 #### Files/Dependencies
 
---> ccc.sh, lib/host_mode.sh, lib/utils.sh, lib/courses.sh, lib/container.sh, and lib/runtime.sh. registry.csv, Dockerfile.template
+--> ccc.sh, share/host_mode.sh, share/utils.sh, share/courses.sh, share/container.sh, and share/runtime.sh. registry.csv, Dockerfile.template
 
 
 ### Additional Commands:
