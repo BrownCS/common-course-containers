@@ -5,15 +5,21 @@ set -euo pipefail
 
 get_container_name() {
   local course="${1:-}"
-  # Return a deterministic container name. If a course is provided, use the
-  # image prefix plus the course id. Otherwise fall back to an explicit
-  # CONTAINER_NAME if set, or the image prefix.
-  local prefix="${CCC_IMAGE_PREFIX:-ccc}"
   if [[ -n "$course" ]]; then
-    echo "${prefix}-${course}"
+    local image_mode
+    image_mode="$(get_course_image_mode "$course")" || image_mode="default"
+    # Shared courses use one reusable runtime named `default`; course-specific
+    # courses keep their own dedicated runtime.
+    if [[ "$image_mode" == "course-specific" ]]; then
+      echo "ccc-${course}"
+    else
+      echo "default"
+    fi
     return 0
   fi
 
+  # No course provided: prefer explicit CONTAINER_NAME, else the image prefix.
+  local prefix="${CCC_IMAGE_PREFIX:-ccc}"
   # No course provided: prefer explicit CONTAINER_NAME, else the prefix.
   if [[ -n "${CONTAINER_NAME:-}" ]]; then
     echo "${CONTAINER_NAME}"

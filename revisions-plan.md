@@ -14,9 +14,11 @@
 - Courses provide three manifest files instead: `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
 - CCC performs the setup itself by reading those manifests through the course installer.
 - `ccc open` should not require user-facing flags for the core flow.
+- Containers are treated as reusable runtime environments when possible; course-specific setup is applied idempotently via the installer manifests.
 - `direnv` is no longer part of the design.
 - The old host-mode-vs-container-mode split is being collapsed into one registry-driven `ccc open` flow.
-- There is no user-facing `ccc close` command in the intended workflow; the shell exit path is responsible for cleanup.
+- There is no user-facing `ccc close` command in the intended workflow; shell exit is the primary lifecycle boundary.
+- The session file is optional bookkeeping for recovery/debugging and is not the source of truth for course state.
 
 ## Installation and location
 
@@ -40,7 +42,7 @@ The command is a single `ccc open [course]` flow. It works like this:
 
 ## Closing or switching courses
 
-Closing a course should happen when the user exits the shell. Cleanup should remove session state and clear the managed-environment marker automatically. Switching courses should close the current one, clean it up, and then open the new course.
+Exiting a course shell should trigger cleanup automatically. Cleanup should clear the managed-environment marker and remove any active session metadata if present. Switching courses should reuse or replace the runtime as needed, but should not depend on a user-facing close command.
 
 ## Cleanup and advanced commands
 
@@ -92,9 +94,10 @@ This tool is no longer something that always starts a container. Some courses wi
 - Keep containers ephemeral by default, with reuse controlled in config.
 
 ### Milestone 5 - Exit-based cleanup and lifecycle handling
-- Terminate sessions cleanly when the shell exits.
+- Make shell exit the primary lifecycle boundary for course environments.
 - Clear managed-environment state automatically on exit.
-- Remove CCC-managed containers/images/networks through explicit cleanup commands, not `ccc close`.
+- Remove any active session metadata when the shell exits, without relying on a separate `ccc close` command.
+- Support container reuse by matching the runtime to the requested course and applying setup idempotently.
 - Preserve compatibility with any legacy references only where needed for transition.
 
 ### Milestone 6 - Update checks and UX polish

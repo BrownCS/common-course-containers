@@ -31,6 +31,12 @@ clear_session() {
     fi
 }
 
+build_course_shell_command() {
+    course_id="$1"
+    course_env_file="/courses/$course_id/env/course.env"
+    printf "mkdir -p '/courses/%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l" "$course_id" "$course_env_file" "$course_env_file"
+}
+
 ccc_cleanup_environment() {
     reason=${1:-shell-exit}
     exit_code=${2:-0}
@@ -195,23 +201,8 @@ ccc_open() {
             CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
             echo "Using current container environment: $CONTAINER_NAME"
         else
-            # Host path: start the container first, then run the standardized
-            # course installer inside the running container.
-            if [ -t 0 ] && [ -t 1 ]; then
-                printf 'This course will be run in a container. Start container now? [Y/n] '
-                read -r ans
-            else
-                ans='y'
-            fi
-            case "$ans" in
-                [nN]|[nN][oO])
-                    echo "Aborting: container start declined"
-                    return 1
-                    ;;
-                *)
-                    ;;
-            esac
-
+            # Host path: start or reuse the container first, then run the
+            # standardized course installer inside the running container.
             start_container_for_course "$course_id" || return $?
         fi
 
@@ -256,9 +247,11 @@ ccc_open() {
             return 0
         fi
 
+        shell_cmd="$(build_course_shell_command "$course_id")"
+
         if is_container_environment; then
             echo "Using existing container shell"
-            "$SHELL" --login
+            bash -lc "$shell_cmd"
             rc=$?
             ccc_cleanup_environment "shell-exit" "$rc"
             return "$rc"
@@ -266,10 +259,10 @@ ccc_open() {
 
         echo "Attaching to container: $CONTAINER_NAME"
         if [ -t 0 ] && [ -t 1 ]; then
-            "$CONTAINER_RUNTIME" exec -it -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "mkdir -p '/courses/$course_id' && export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l"
+            "$CONTAINER_RUNTIME" exec -it -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "$shell_cmd"
             rc=$?
         else
-            "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "mkdir -p '/courses/$course_id' && export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l"
+            "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "$shell_cmd"
             rc=$?
         fi
         ccc_cleanup_environment "shell-exit" "$rc"

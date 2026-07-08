@@ -11,23 +11,8 @@ mkdir -p "$CCC_COURSES_DIR" "$(resolve_config_dir)"
 
 printf '{"course":"default","container_id":"abc123","pid":"","start":"now"}\n' > "$(resolve_config_dir)/session.json"
 
-# Provide only the minimal command set needed for the scripts and ensure podman is not found.
-TMP_BIN="$TMP_HOME/bin"
-mkdir -p "$TMP_BIN"
-for cmd in awk basename cat chmod date dirname grep head mkdir mv pwd rm sed sh uname; do
-  if command -v "$cmd" >/dev/null 2>&1; then
-    ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"
-  fi
-done
-PATH="$TMP_BIN" ccc_close >/tmp/ccc-close-out 2>/tmp/ccc-close-err || status=$?
-status=${status:-0}
-
-if [ "$status" -ne 0 ]; then
-  echo "FAIL: ccc_close exited with status $status" >&2
-  echo "stdout:" >&2
-  cat /tmp/ccc-close-out >&2
-  echo "stderr:" >&2
-  cat /tmp/ccc-close-err >&2
+if ! ccc_cleanup_environment "shell-exit" 0; then
+  echo "FAIL: shell-exit cleanup exited with an error" >&2
   exit 2
 fi
 
@@ -37,4 +22,9 @@ if [ -f "$(resolve_config_dir)/session.json" ]; then
   exit 2
 fi
 
-echo "PASS: ccc_close clears the session even when podman is unavailable"
+if [ "${CCC_MANAGED_ENV:-}" != "false" ]; then
+  echo "FAIL: managed-environment marker was not reset" >&2
+  exit 2
+fi
+
+echo "PASS: shell-exit cleanup clears the session and managed-env marker"

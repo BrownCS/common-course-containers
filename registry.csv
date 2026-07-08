@@ -1,6 +1,8 @@
 # Common Course Containers - Local Course Registry
 # Format (required columns): id,repo_url,name,semester,requires_container,image_mode,image_ref,container_arch,default_branch,notes
 # image_mode must be either default or course-specific
+# image_mode=default uses the shared default container runtime
+# image_mode=course-specific uses a dedicated course container
 # If image_mode=course-specific, image_ref must be provided
 # container_arch may be empty for native-arch default, or set to amd64/arm64
 # Lines starting with # are comments
