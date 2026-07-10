@@ -184,10 +184,11 @@ install_files() {
     cp "$REPO_DIR/bin/ccc" "$SHARE_DIR/" 2>/dev/null || true
 
     # Copy runtime scripts and static data from `share/`
+    rm -f "$SHARE_DIR"/Dockerfile.template "$SHARE_DIR"/Dockerfile.generated.* "$SHARE_DIR"/registry.csv "$SHARE_DIR"/*.sh 2>/dev/null || true
     cp "$REPO_DIR/share/"*.sh "$SHARE_DIR/" 2>/dev/null || true
     cp "$REPO_DIR/share/registry.csv" "$SHARE_DIR/" 2>/dev/null || true
     cp "$REPO_DIR/VERSION" "$SHARE_DIR/" 2>/dev/null || true
-    cp "$REPO_DIR/Dockerfile.template" "$SHARE_DIR/" 2>/dev/null || true
+    cp "$REPO_DIR/share/Dockerfile.template" "$SHARE_DIR/" 2>/dev/null || true
 
     # Script already has path detection built-in, no modification needed
 

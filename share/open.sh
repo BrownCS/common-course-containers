@@ -123,7 +123,7 @@ start_container_for_course() {
     base_image=$(get_course_build_base_image "$course_id") || base_image="$CCC_DEFAULT_BASE_IMAGE"
     image_name="$(get_image_name "$course_id")"
 
-    build_image "$base_image" "$image_name" || return 3
+    build_image "$base_image" "$image_name" "$course_id" || return 3
 
     CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
     start_new_container

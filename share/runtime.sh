@@ -105,7 +105,7 @@ build_course_image() {
   local base_image
   base_image="$(get_course_build_base_image "$course")"
 
-  build_image "$base_image" "$iname"
+  build_image "$base_image" "$iname" "$course"
 }
 
 # Enter (or create) a container for a course.

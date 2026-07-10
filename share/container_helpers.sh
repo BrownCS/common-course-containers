@@ -72,26 +72,41 @@ validate_base_image() {
     return 0
   else
     echo_error "Unsupported base image: $base_image"
-    echo "Currently supported base images:"
+    echo "Currently supported distro-based base images:"
     echo "  - $CCC_DEFAULT_BASE_IMAGE"
     echo "  - ubuntu:jammy"
     echo "  - ubuntu:focal"
     echo "  - debian:bookworm"
     echo "  - debian:bullseye"
+    echo "Course-specific images from the registry bypass this distro check."
     return 1
   fi
+}
+
+allow_course_specific_base_image() {
+  local course="${1:-}"
+  if [[ -z "$course" ]]; then
+    return 1
+  fi
+
+  local mode
+  mode="$(get_course_image_mode "$course")" || mode="default"
+  [[ "$mode" == "course-specific" ]]
 }
 
 get_image_build_stamp() {
   local image_name="${1:-$IMAGE_NAME}"
   local stamp_file="$SCRIPT_DIR/.ccc-image-buildstamp-${image_name//[^A-Za-z0-9._-]/_}"
   local tmp_file
+  local repo_root
+  repo_root="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || true)"
   tmp_file="$(mktemp)"
   {
     [ -f "$SCRIPT_DIR/Dockerfile.template" ] && sha256sum "$SCRIPT_DIR/Dockerfile.template"
-    [ -f "$SCRIPT_DIR/ccc.sh" ] && sha256sum "$SCRIPT_DIR/ccc.sh"
+    [ -f "$SCRIPT_DIR/ccc" ] && sha256sum "$SCRIPT_DIR/ccc"
+    [ -f "$repo_root/bin/ccc" ] && sha256sum "$repo_root/bin/ccc"
     [ -f "$SCRIPT_DIR/registry.csv" ] && sha256sum "$SCRIPT_DIR/registry.csv"
-    find "$SCRIPT_DIR/lib" -maxdepth 1 -type f -name '*.sh' 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null
+    find "$SCRIPT_DIR" -maxdepth 1 -type f -name '*.sh' 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null
   } >"$tmp_file"
   local stamp
   stamp=$(sha256sum "$tmp_file" | awk '{print $1}')
@@ -103,6 +118,7 @@ get_image_build_stamp() {
 build_image() {
   local base_image="${1:-$CCC_DEFAULT_BASE_IMAGE}" # Default to ubuntu:noble
   local image_name="${2:-ccc}"          # Default to ccc
+  local course_id="${3:-}"
   local arch="${ARCH}"
   local stamp_file="$SCRIPT_DIR/.ccc-image-buildstamp-${image_name//[^A-Za-z0-9._-]/_}"
   local build_stamp
@@ -118,8 +134,11 @@ build_image() {
     echo "Image '$image_name' is out of date with current CCC sources; rebuilding..."
   fi
 
-  # Validate base image
-  if ! validate_base_image "$base_image"; then
+  # Validate base image unless this is a course-specific base image that the
+  # registry explicitly selected for this course.
+  if allow_course_specific_base_image "$course_id"; then
+    :
+  elif ! validate_base_image "$base_image"; then
     return 1
   fi
 
@@ -139,12 +158,32 @@ build_image() {
     return 1
   fi
 
+  local build_context="$SCRIPT_DIR"
+  local temp_context=""
+  local repo_root=""
+
+  # When running from a repo checkout, SCRIPT_DIR points to share/ and does
+  # not contain the CLI entrypoint file expected by Dockerfile.template.
+  # Synthesize a temporary build context that includes `ccc` from repo/bin.
+  if [[ ! -f "$SCRIPT_DIR/ccc" ]]; then
+    repo_root="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd || true)"
+    if [[ -n "$repo_root" && -f "$repo_root/bin/ccc" ]]; then
+      temp_context="$(mktemp -d)"
+      cp -a "$SCRIPT_DIR/." "$temp_context/"
+      cp "$repo_root/bin/ccc" "$temp_context/ccc"
+      build_context="$temp_context"
+    fi
+  fi
+
   echo "Building $CONTAINER_RUNTIME image '$image_name' with base '$base_image' for $PLATFORM..."
-  echo_and_run "$CONTAINER_RUNTIME" build -t "$image_name" -f "$dockerfile_path" --platform "${PLATFORM}" "$SCRIPT_DIR"
+  echo_and_run "$CONTAINER_RUNTIME" build -t "$image_name" -f "$dockerfile_path" --platform "${PLATFORM}" "$build_context"
   local build_result=$?
 
   # Cleanup generated Dockerfile
   rm -f "$dockerfile_path"
+  if [[ -n "$temp_context" ]]; then
+    rm -rf "$temp_context"
+  fi
 
   if [[ $build_result -ne 0 ]]; then
     echo_error "Build failed"
