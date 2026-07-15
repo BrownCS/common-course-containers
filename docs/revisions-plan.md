@@ -4,15 +4,18 @@
 
 - Milestones 1-2 are effectively complete: config/registry basics and the top-level CLI dispatcher are in place.
 - Milestone 3 is mostly complete: `ccc open` exists, course directories are managed separately, and sessions are tracked.
-- Milestone 4 is the main in-progress area: container flow is registry-driven and uses the standardized course installer manifests.
-- Milestone 5 is partially reframed: user-facing `ccc close` is no longer the goal; cleanup should happen automatically when the user exits the shell.
-- Milestones 6-8 are still ahead of us.
+- Milestone 4 is mostly complete: container flow is registry-driven, uses the standardized course installer manifests, and supports course-specific images.
+- Milestone 5 is actively in progress: shell-exit cleanup exists, and `ccc cleanup [course]` now removes a course's runtime state without touching the repo checkout.
+- Course installation/update behavior is the next detail to tighten: setup should be checked against installed state, starting with package presence.
+- Milestone 7 cleanup work has started: the explicit cleanup command is now split into its own module, and shared session helpers have been extracted.
+- Milestones 6 and 8 are still ahead of us.
 
 ## Current design decisions
 
 - We no longer use per-course `setup.sh` scripts.
 - Courses provide three manifest files instead: `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
 - CCC performs the setup itself by reading those manifests through the course installer.
+- CCC should verify whether the requested course setup is already present before skipping work; the installed state is the source of truth.
 - `ccc open` should not require user-facing flags for the core flow.
 - Containers are treated as reusable runtime environments when possible; course-specific setup is applied idempotently via the installer manifests.
 - `direnv` is no longer part of the design.
@@ -46,7 +49,19 @@ Exiting a course shell should trigger cleanup automatically. Cleanup should clea
 
 ## Cleanup and advanced commands
 
-Cleanup still needs to be reworked so CCC-managed containers, images, and networks can be removed cleanly.
+Cleanup is now split into two layers: `ccc cleanup [course]` handles course-scoped runtime reset, while broader `ccc remove` and `ccc uninstall` remain for later container/image/install cleanup.
+
+Course setup should follow the same shape: compare what the course manifest asks for to what is already installed, and rerun only the portions that are missing or out of date. That keeps updates visible when a course repository adds or removes packages, links, or environment variables.
+
+Course setup checklist:
+
+1. Read the current `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt` files from the course repo.
+2. Check whether each requested package is already installed before trying to install it.
+3. Create or refresh the requested symlinks only when they are missing or point somewhere wrong.
+4. Re-emit the generated environment file every time the course opens so env changes are always current.
+5. Treat the course repo as the source of truth for requested state.
+6. Re-run the relevant setup steps whenever the manifests change, even if the course has been opened before.
+7. Keep cleanup separate: it should remove generated runtime state, not the course repository itself.
 
 Planned advanced commands:
 
@@ -98,17 +113,21 @@ This tool is no longer something that always starts a container. Some courses wi
 - Clear managed-environment state automatically on exit.
 - Remove any active session metadata when the shell exits, without relying on a separate `ccc close` command.
 - Support container reuse by matching the runtime to the requested course and applying setup idempotently.
+- Replace the old setup gate with direct installed-state checks so changes in `packages.txt`, `links.txt`, or `env.txt` trigger the right update work.
 - Preserve compatibility with any legacy references only where needed for transition.
+
+### Milestone 7 - Backward compatibility and cleanup
+- Keep `ccc cleanup [course]` scoped to course runtime state only.
+- Keep shared lifecycle helpers factored so `open` and `cleanup` can reuse session and course-state logic.
+- Make the installer compare installed package/link/env state to the current manifests.
+- Remove old `setup.sh` assumptions from helper paths and documentation.
+- Remove duplicate host/container code paths.
+- Align docs and tests with the manifests-first course contract.
 
 ### Milestone 6 - Update checks and UX polish
 - Define update policy for git-installed vs packaged installs.
 - Prompt during setup for whether automatic update checks are enabled.
 - Keep package-manager installs from auto-updating themselves.
-
-### Milestone 7 - Backward compatibility and cleanup
-- Remove old `setup.sh` assumptions from helper paths and documentation.
-- Remove duplicate host/container code paths.
-- Align docs and tests with the manifests-first course contract.
 
 ### Milestone 8 - Packaging
 - Packaging recipes for deb/rpm/Homebrew.
@@ -116,4 +135,4 @@ This tool is no longer something that always starts a container. Some courses wi
 
 ## Where we are now
 
-We are around Milestone 4, with some Milestone 5 behavior already starting to appear in the open/session cleanup flow. The main remaining work is container polish, exit-based cleanup, and then the later lifecycle commands.
+We are now between Milestones 5 and 7: the core course-open path is in place, shell-exit cleanup works, and `ccc cleanup [course]` is available for course-scoped resets. The next design step is to make course setup update-aware by checking installed state directly, so package additions and manifest changes are picked up immediately.

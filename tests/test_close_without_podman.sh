@@ -3,6 +3,7 @@ set -eu
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 . "$repo_root/share/config.sh"
 . "$repo_root/share/open.sh"
+. "$repo_root/share/session.sh"
 
 TMP_HOME="$(mktemp -d)"
 export HOME="$TMP_HOME"

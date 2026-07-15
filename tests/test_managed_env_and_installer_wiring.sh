@@ -14,14 +14,14 @@ if ! grep -q 'export CCC_MANAGED_ENV=false' "$open_file"; then
   exit 2
 fi
 
-if ! grep -q '.ccc-installer-ran' "$open_file" && ! grep -q 'installer-ran' "$open_file"; then
-  echo "FAIL: open flow does not use an installer cache marker" >&2
+if ! grep -q 'package_is_installed' "$installer_file"; then
+  echo "FAIL: installer does not check package installation status directly" >&2
   exit 2
 fi
 
-if ! grep -q '.ccc-installer-ran' "$installer_file"; then
-  echo "FAIL: installer does not record that setup has already run" >&2
+if ! grep -q 'PACKAGES_FILE' "$installer_file" || ! grep -q 'LINKS_FILE' "$installer_file" || ! grep -q 'ENV_FILE' "$installer_file"; then
+  echo "FAIL: installer does not read the manifest files directly" >&2
   exit 2
 fi
 
-echo "PASS: managed-env marker and installer cache markers are wired in"
+echo "PASS: managed-env marker and manifest-driven installer wiring are present"

@@ -32,6 +32,8 @@ source "$repo_root/share/container_helpers.sh"
 # shellcheck disable=SC1091
 source "$repo_root/share/runtime.sh"
 # shellcheck disable=SC1091
+source "$repo_root/share/session.sh"
+# shellcheck disable=SC1091
 source "$repo_root/share/open.sh"
 
 ensure_course_exists() { return 0; }
@@ -61,6 +63,12 @@ fi
 
 if ! grep -q "/courses/csci-0300-demo/env/course.env" "$TMPDIR/podman.log"; then
   echo "FAIL: open did not source the course env file in the shell command" >&2
+  cat "$TMPDIR/podman.log" >&2
+  exit 1
+fi
+
+if ! grep -q "cd '/courses/csci-0300-demo'" "$TMPDIR/podman.log"; then
+  echo "FAIL: open did not cd into the course directory in the shell command" >&2
   cat "$TMPDIR/podman.log" >&2
   exit 1
 fi

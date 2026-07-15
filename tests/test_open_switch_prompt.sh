@@ -3,6 +3,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 . "$repo_root/share/config.sh"
 . "$repo_root/share/utils.sh"
+. "$repo_root/share/session.sh"
 . "$repo_root/share/open.sh"
 
 TMP_HOME="$(mktemp -d)"

@@ -6,68 +6,65 @@ set -eu
 
 COURSE_ROOT=${1:-/opt/course}
 SETUP_DIR="$COURSE_ROOT/setup"
-INSTALLER_CACHE_FILE="$COURSE_ROOT/.ccc-installer-ran"
 PACKAGES_FILE="$SETUP_DIR/packages.txt"
 LINKS_FILE="$SETUP_DIR/links.txt"
 ENV_FILE="$SETUP_DIR/env.txt"
 LOG_FILE="$SETUP_DIR/install.log"
-APPLIED_PACKAGES="$SETUP_DIR/applied-packages.txt"
-LINKS_MANIFEST="$SETUP_DIR/links.manifest"
-APPLIED_ENV="$SETUP_DIR/applied-env.txt"
 
 mkdir -p "$SETUP_DIR"
-if [ -f "$INSTALLER_CACHE_FILE" ]; then
-  exit 0
-fi
 : > "$LOG_FILE"
-
-if [ ! -f "$PACKAGES_FILE" ] && [ ! -f "$LINKS_FILE" ] && [ ! -f "$ENV_FILE" ]; then
-  : > "$INSTALLER_CACHE_FILE"
-  exit 0
-fi
 
 log() {
   printf "%s\n" "$1" >> "$LOG_FILE"
 }
 
+package_is_installed() {
+  pkg="$1"
+  dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q '^install ok installed$'
+}
+
 # Phase A: install packages
 log "Starting package install"
 PACKAGES=""
+MISSING_PACKAGES=""
 HAS_AMD64=0
 if [ -f "$PACKAGES_FILE" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     line="$(printf '%s' "$line" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
     [ -z "$line" ] && continue
     PACKAGES="$PACKAGES $line"
-    case "$line" in
-      *:amd64) HAS_AMD64=1 ;;
-    esac
+    if package_is_installed "$line"; then
+      log "Package already installed: $line"
+    else
+      MISSING_PACKAGES="$MISSING_PACKAGES $line"
+      case "$line" in
+        *:amd64) HAS_AMD64=1 ;;
+      esac
+    fi
   done < "$PACKAGES_FILE"
 else
   log "No packages file found at $PACKAGES_FILE"
 fi
 
-# Add multiarch if needed
-if [ "$HAS_AMD64" -eq 1 ]; then
-  log "Detected amd64 packages; enabling amd64 multiarch"
-  dpkg --add-architecture amd64 2>>"$LOG_FILE" || true
-  apt-get update >>"$LOG_FILE" 2>&1 || true
-fi
+if [ -n "$(printf '%s' "$MISSING_PACKAGES" | sed 's/[[:space:]]//g')" ]; then
+  # Convert missing packages into positional args safely.
+  set -- $MISSING_PACKAGES
 
-# Install packages (idempotent via apt)
-if [ -n "$(printf '%s' "$PACKAGES" | sed 's/[[:space:]]//g')" ]; then
-  # Convert PACKAGES into positional args safely
-  set -- $PACKAGES
-  log "Installing packages: $*"
+  if [ "$HAS_AMD64" -eq 1 ]; then
+    log "Detected amd64 packages; enabling amd64 multiarch"
+    dpkg --add-architecture amd64 2>>"$LOG_FILE" || true
+    apt-get update >>"$LOG_FILE" 2>&1 || true
+  fi
+
+  log "Installing missing packages: $*"
   apt-get update >>"$LOG_FILE" 2>&1 || true
   apt-get install -y --no-install-recommends "$@" >>"$LOG_FILE" 2>&1 || {
     log "apt-get install failed"
     exit 1
   }
-  printf "%s\n" "$@" > "$APPLIED_PACKAGES"
   log "Package installation complete"
 else
-  log "No packages to install"
+  log "All requested packages already installed"
 fi
 
 # Phase B: discover binaries and create symlinks
@@ -76,9 +73,6 @@ log "Discovering binaries and creating symlinks"
 # Ensure course bin root
 COURSE_BIN="$COURSE_ROOT/bin"
 mkdir -p "$COURSE_BIN"
-
-# Clear previous manifest
-: > "$LINKS_MANIFEST"
 
 # Helper to create symlink and record
 create_symlink() {
@@ -90,7 +84,6 @@ create_symlink() {
     return
   fi
   ln -sf "$src" "$dst"
-  printf "%s -> %s\n" "$dst" "$src" >> "$LINKS_MANIFEST"
 }
 
 # Honor explicit links.txt if present
@@ -147,12 +140,11 @@ for f in /usr/bin/*-13; do
   create_symlink "$arch_dir/$canonical_nover" "$COURSE_BIN/$canonical_nover"
 done
 
-log "Symlink creation complete; manifest at $LINKS_MANIFEST"
+log "Symlink creation complete"
 
 # Phase C: apply environment variables
 log "Applying environment variables"
 mkdir -p "$COURSE_ROOT/env"
-: > "$APPLIED_ENV"
 : > "$COURSE_ROOT/env/course.env"
 if [ -f "$ENV_FILE" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
@@ -163,7 +155,6 @@ if [ -f "$ENV_FILE" ]; then
       *=*) key="${line%%=*}" ; val="${line#*=}" ;;
       *) log "malformed env line: $line" ; continue ;;
     esac
-    printf '%s=%s\n' "$key" "$val" >> "$APPLIED_ENV"
     printf 'export %s="%s"\n' "$key" "$val" >> "$COURSE_ROOT/env/course.env"
   done < "$ENV_FILE"
 else
@@ -173,5 +164,4 @@ fi
 log "Environment applied; file at $COURSE_ROOT/env/course.env"
 
 log "Installer finished successfully"
-: > "$INSTALLER_CACHE_FILE"
 exit 0

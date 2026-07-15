@@ -5,36 +5,14 @@
 
 ## NOTE: `share/open.sh` is a small orchestrator expected to be sourced by
 ## `ccc.sh`. `ccc.sh` should set `SCRIPT_DIR` and pre-load core libraries
-## (utils, config, registry, courses, runtime). This file intentionally
+## (utils, config, registry, courses, runtime, session). This file intentionally
 ## avoids re-sourcing those libraries to stay minimal.
-
-
-get_session_file() {
-    cfgdir=$(resolve_config_dir) || return 1
-    echo "$cfgdir/session.json"
-}
-
-write_session() {
-    course=$1
-    container_id=${2:-}
-    pid=${3:-}
-    start_time=$(date --iso-8601=seconds 2>/dev/null || date +%s)
-    session_file=$(get_session_file) || return 1
-    printf '{"course":"%s","container_id":"%s","pid":"%s","start":"%s"}\n' "$course" "$container_id" "$pid" "$start_time" >"$session_file"
-    chmod 600 "$session_file" 2>/dev/null || true
-}
-
-clear_session() {
-    session_file=$(get_session_file 2>/dev/null || true)
-    if [ -n "$session_file" ]; then
-        rm -f "$session_file" 2>/dev/null || true
-    fi
-}
 
 build_course_shell_command() {
     course_id="$1"
+    course_dir="/courses/$course_id"
     course_env_file="/courses/$course_id/env/course.env"
-    printf "mkdir -p '/courses/%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l" "$course_id" "$course_env_file" "$course_env_file"
+    printf "mkdir -p '%s' && cd '%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l" "$course_dir" "$course_dir" "$course_env_file" "$course_env_file"
 }
 
 ccc_cleanup_environment() {
@@ -55,16 +33,19 @@ is_managed_environment() {
     return 1
 }
 
-ccd_clone_if_missing() {
+sync_course_checkout() {
     course_id="$1"
     course_dir="$2"
     entry=$(registry_lookup "$course_id") || true
     repo_url=$(printf '%s' "$entry" | awk -F',' '{print $2}')
+    checkout_was_new=false
+
     if [ ! -d "$course_dir" ]; then
         if [ -n "$repo_url" ]; then
             echo "Cloning $repo_url -> $course_dir"
             if command -v git >/dev/null 2>&1; then
                 git clone "$repo_url" "$course_dir" || { echo "git clone failed" >&2; return 3; }
+                checkout_was_new=true
             else
                 echo "git not found; cannot clone course" >&2
                 return 4
@@ -72,7 +53,54 @@ ccd_clone_if_missing() {
         else
             echo "Creating course directory for $course_id at $course_dir"
             mkdir -p "$course_dir" || return 5
+            checkout_was_new=true
         fi
+    fi
+
+    if [ ! -d "$course_dir/.git" ]; then
+        return 0
+    fi
+
+    if [ "$checkout_was_new" = "true" ]; then
+        return 0
+    fi
+
+    entry=$(registry_lookup "$course_id") || true
+    default_branch=$(printf '%s' "$entry" | awk -F',' '{print $9}')
+    if [ -z "$default_branch" ]; then
+        default_branch="main"
+    fi
+
+    update_checkout=false
+    if [ "${CCC_AUTO_UPDATE:-false}" = "true" ]; then
+        update_checkout=true
+    elif [ -t 0 ] && [ -t 1 ]; then
+        printf "Update %s from git before opening it? [Y/n] " "$course_id"
+        read -r answer
+        case "${answer:-y}" in
+            [nN]|[nN][oO])
+                update_checkout=false
+                ;;
+            *)
+                update_checkout=true
+                ;;
+        esac
+    fi
+
+    if [ "$update_checkout" != "true" ]; then
+        return 0
+    fi
+
+    echo "Updating $course_id from git"
+    if command -v git >/dev/null 2>&1; then
+        if [ -n "$default_branch" ]; then
+            git -C "$course_dir" pull --ff-only --quiet origin "$default_branch" || return 1
+        else
+            git -C "$course_dir" pull --ff-only --quiet || return 1
+        fi
+    else
+        echo "git not found; cannot auto-update course repo" >&2
+        return 4
     fi
 }
 
@@ -159,8 +187,8 @@ ccc_open() {
     # Ensure course exists in registry
     ensure_course_exists "$course_id" || return 1
 
-    # Clone if missing
-    ccd_clone_if_missing "$course_id" "$course_dir" || return $?
+    # Clone on first open, otherwise optionally update existing checkouts.
+    sync_course_checkout "$course_id" "$course_dir" || return $?
 
     if is_managed_environment; then
         echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
@@ -235,22 +263,16 @@ ccc_open() {
         INSTALLER_PATH="/usr/local/share/ccc/course_installer.sh"
         host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
         container_course_dir="${CONTAINER_WORKDIR:-/courses/$course_id}"
-        INSTALLER_CACHE_FILE="$host_course_dir/.ccc-installer-ran"
         echo "Running course installer inside container: $CONTAINER_NAME"
         if is_container_environment; then
             if [ -x "$INSTALLER_PATH" ]; then
-                if [ -f "$INSTALLER_CACHE_FILE" ]; then
-                    echo "Installer already ran for $container_course_dir; skipping"
-                else
-                    "$INSTALLER_PATH" "$container_course_dir" || return $?
-                    : > "$INSTALLER_CACHE_FILE"
-                fi
+                "$INSTALLER_PATH" "$container_course_dir" || return $?
             else
                 echo "Installer not found at $INSTALLER_PATH" >&2
                 return 2
             fi
         else
-            "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then if [ -f '$container_course_dir/.ccc-installer-ran' ]; then echo 'Installer already ran for $container_course_dir; skipping'; else '$INSTALLER_PATH' '$container_course_dir' && : > '$container_course_dir/.ccc-installer-ran'; fi; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi"
+            "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi"
             rc=$?
             if [ "$rc" -ne 0 ]; then
                 return "$rc"
