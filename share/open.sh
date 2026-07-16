@@ -33,6 +33,18 @@ is_managed_environment() {
     return 1
 }
 
+report_installer_failure() {
+    course_id="$1"
+    host_course_dir="$2"
+    container_course_dir="$3"
+    rc="$4"
+
+    echo "Course installer failed for $course_id (exit code: $rc)." >&2
+    echo "Check install logs for details:" >&2
+    echo "  Host: $host_course_dir/setup/install.log" >&2
+    echo "  Container: $container_course_dir/setup/install.log" >&2
+}
+
 sync_course_checkout() {
     course_id="$1"
     course_dir="$2"
@@ -197,14 +209,10 @@ ccc_open() {
 
     # Detect whether the registry says this course requires a container.
     requires=$(get_course_requires_container "$course_id") || requires="true"
-    if [ "$requires" != "true" ]; then
-        mode="local"
-    elif is_container_environment; then
-        mode="container"
-    else
+    if [ "$requires" = "true" ]; then
         mode="container"
     fi
-
+    # Local Path
     if [ "$mode" = "local" ]; then
         # Local mode only opens the course directory and session; standardized
         # course setup is handled by the installer/manifests in container mode.
@@ -220,34 +228,26 @@ ccc_open() {
         rc=$?
         ccc_cleanup_environment "shell-exit" "$rc"
         return "$rc"
+    # Container Path
     else
-        # Container path: if we are already inside a CCC container, reuse the
-        # current environment instead of trying to start a nested container.
-        if is_container_environment; then
-            CONTAINER_NAME="$(hostname 2>/dev/null || echo "ccc-container")"
-            CONTAINER_RUNTIME=""
-            CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
-            echo "Using current container environment: $CONTAINER_NAME"
-        else
-            # Host path: ask user for consent before creating/starting a container
-            # when running interactively. If stdin is not a tty, assume yes.
-            if [ -t 0 ]; then
-                printf "Course %s requires a container. Create/start it now? [Y/n] " "$course_id"
-                read -r _ans
-                case "${_ans:-y}" in
-                    [yY]|[yY][eE][sS]|"")
-                        ;; # proceed
-                    *)
-                        echo "Aborting: container required for $course_id." >&2
-                        return 1
-                        ;;
-                esac
-            fi
-
-            # Host path: start or reuse the container first, then run the
-            # standardized course installer inside the running container.
-            start_container_for_course "$course_id" || return $?
+        # Ask user for consent before creating/starting a container
+        # when running interactively. If stdin is not a tty, assume yes.
+        if [ -t 0 ]; then
+            printf "Course %s requires a container. Create/start it now? [Y/n] " "$course_id"
+            read -r _ans
+            case "${_ans:-y}" in
+                [yY]|[yY][eE][sS]|"")
+                    ;; # proceed
+                *)
+                    echo "Aborting: container required for $course_id." >&2
+                    return 1
+                    ;;
+            esac
         fi
+
+        # start or reuse the container first, then run the
+        # standardized course installer inside the running container.
+        start_container_for_course "$course_id" || return $?
 
         # Ensure runtime vars are set by start_container_for_course
         CONTAINER_NAME="${CONTAINER_NAME:-$(hostname 2>/dev/null || echo "$course_id")}" 
@@ -264,19 +264,15 @@ ccc_open() {
         host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
         container_course_dir="${CONTAINER_WORKDIR:-/courses/$course_id}"
         echo "Running course installer inside container: $CONTAINER_NAME"
-        if is_container_environment; then
-            if [ -x "$INSTALLER_PATH" ]; then
-                "$INSTALLER_PATH" "$container_course_dir" || return $?
-            else
-                echo "Installer not found at $INSTALLER_PATH" >&2
-                return 2
-            fi
+        if "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi" ; then
+            rc=0
         else
-            "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi"
             rc=$?
-            if [ "$rc" -ne 0 ]; then
-                return "$rc"
-            fi
+        fi
+        echo "installer error code: $rc"
+        if [ "$rc" -ne 0 ]; then
+            report_installer_failure "$course_id" "$host_course_dir" "$container_course_dir" "$rc"
+            return "$rc"
         fi
 
         if [ "$no_shell" = "true" ]; then
@@ -285,14 +281,6 @@ ccc_open() {
         fi
 
         shell_cmd="$(build_course_shell_command "$course_id")"
-
-        if is_container_environment; then
-            echo "Using existing container shell"
-            bash -lc "$shell_cmd"
-            rc=$?
-            ccc_cleanup_environment "shell-exit" "$rc"
-            return "$rc"
-        fi
 
         echo "Attaching to container: $CONTAINER_NAME"
         if [ -t 0 ] && [ -t 1 ]; then
