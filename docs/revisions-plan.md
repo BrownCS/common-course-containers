@@ -136,3 +136,49 @@ This tool is no longer something that always starts a container. Some courses wi
 ## Where we are now
 
 We are now between Milestones 5 and 7: the core course-open path is in place, shell-exit cleanup works, and `ccc cleanup [course]` is available for course-scoped resets. The next design step is to make course setup update-aware by checking installed state directly, so package additions and manifest changes are picked up immediately.
+
+## Steps Left To Finish
+
+The remaining work is smaller than the work already done, but it matters for making CCC feel finished and safe for students and instructors.
+
+### 1. Finish `ccc cleanup` for shared default containers
+
+- Keep the current behavior for course-specific courses: remove the course container, image, and generated install/runtime files.
+- Add tracking for default-container courses so CCC knows which course checkouts currently depend on the shared default container.
+- On first open of a default-container course, record that course id in CCC-managed state.
+- On `ccc cleanup [course]`, remove that course id from the tracked default-container list.
+- If the cleaned course was the last default-container user, prompt before deleting the shared default container.
+- If there are still tracked default-container courses, prompt before deleting the shared default container and the remaining generated course files.
+- If the user declines, keep the shared container and the remaining shared-course files intact.
+- If the default-container list is empty, still prompt before deleting the container so cleanup remains user-controlled.
+
+### 2. Tighten update behavior for opened courses
+
+- Keep `ccc open` responsible for cloning a missing course checkout.
+- Reopen behavior should update existing git checkouts when auto-update is enabled, or prompt the user when it is not.
+- Make manifest changes visible on reopen so package, link, and env updates are picked up without manual repo surgery.
+
+### 3. Finish the manifests-first course contract
+
+- Remove remaining assumptions that courses must ship a bespoke `setup.sh` flow.
+- Keep the course installer as the single place that applies `packages.txt`, `links.txt`, and `env.txt`.
+- Make sure course maintainers have one clear migration path from Dockerfile-based setup to CCC manifests.
+
+### 4. Polish professor/student-facing UX
+
+- Improve error messages so installer failures always point at the relevant log file.
+- Make the docs describe the current workflow, not the old host/container split.
+- Make the default vs course-specific distinction easy to understand from the docs and registry.
+- Keep the command surface small and predictable: `init`, `open`, `cleanup`, `config`, `list`.
+
+### 5. Validate with more course migrations
+
+- Add at least one more course that is apt/package-heavy.
+- Add at least one course that depends on a more custom course image.
+- Use those conversions to decide whether CCC can support them as default-container courses or whether they need to remain course-specific.
+
+### 6. Decide what belongs in the release-ready toolset
+
+- Leave packaging work for later unless a distribution target is required immediately.
+- Keep compatibility wrappers only where they help transition from old flows to the new one.
+- Remove any stale docs or tests that still describe the old `setup.sh`-first behavior.

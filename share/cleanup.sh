@@ -10,10 +10,50 @@ remove_course_runtime_files() {
     course_dir="$1"
 
     rm -f \
-    "$course_dir/.ccc-installer-ran" \
+        "$course_dir/.ccc-installer-ran" \
         "$course_dir/setup/install.log" \
         "$course_dir/env/course.env" \
         2>/dev/null || true
+}
+
+remove_default_container_runtime_files() {
+    while IFS= read -r shared_course; do
+        [ -n "$shared_course" ] || continue
+        remove_course_runtime_files "$(get_course_dir "$shared_course")"
+    done <<EOF
+$(list_default_container_courses)
+EOF
+}
+
+prompt_remove_default_container() {
+    remaining_courses="$(list_default_container_courses)"
+    if [ -n "$remaining_courses" ]; then
+        printf 'The shared default container is still used by:\n%s\n' "$remaining_courses" >&2
+        printf 'Delete the shared default container and runtime files for the remaining default courses? [y/N] ' >&2
+    else
+        printf 'Delete the shared default container? [y/N] ' >&2
+    fi
+
+    if [ ! -t 0 ]; then
+        echo >&2
+        echo "Keeping the shared default container because cleanup is not interactive." >&2
+        return 1
+    fi
+
+    read -r answer
+    case "$answer" in
+        [yY]|[yY][eE][sS])
+            remove_course_container default
+            if [ -n "$remaining_courses" ]; then
+                remove_default_container_runtime_files
+            fi
+            return 0
+            ;;
+        *)
+            echo "Keeping the shared default container and remaining default-course files." >&2
+            return 1
+            ;;
+    esac
 }
 
 remove_course_container() {
@@ -77,9 +117,15 @@ ccc_cleanup_course() {
         fi
     fi
 
-    remove_course_container "$course_id"
-    remove_course_image "$course_id"
-    remove_course_runtime_files "$course_dir"
+    if [ "$(get_course_image_mode "$course_id")" = "default" ]; then
+        untrack_default_container_course "$course_id"
+        remove_course_runtime_files "$course_dir"
+        prompt_remove_default_container || true
+    else
+        remove_course_container "$course_id"
+        remove_course_image "$course_id"
+        remove_course_runtime_files "$course_dir"
+    fi
 
     export CCC_MANAGED_ENV=false
     echo "Cleaned $course_id"

@@ -269,10 +269,13 @@ ccc_open() {
         else
             rc=$?
         fi
-        echo "installer error code: $rc"
         if [ "$rc" -ne 0 ]; then
             report_installer_failure "$course_id" "$host_course_dir" "$container_course_dir" "$rc"
             return "$rc"
+        fi
+
+        if [ "$(get_course_image_mode "$course_id")" = "default" ]; then
+            track_default_container_course "$course_id" || return $?
         fi
 
         if [ "$no_shell" = "true" ]; then
