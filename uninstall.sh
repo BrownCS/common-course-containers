@@ -37,62 +37,6 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$REPO_DIR/share/utils.sh"
 source "$REPO_DIR/share/config.sh"
 
-remove_podman_artifacts() {
-    if ! command -v podman >/dev/null 2>&1; then
-        return 0
-    fi
-
-    local runtime="podman"
-    local local_ids=""
-
-    log_info "Removing CCC Podman containers..."
-    local_ids=$($runtime ps -a --filter "name=ccc" --format "{{.Names}} {{.ID}}" 2>/dev/null) || true
-    if [[ -n "$local_ids" ]]; then
-        while read -r name id; do
-            if [[ -n "$name" ]]; then
-                $runtime stop "$id" 2>/dev/null || true
-                $runtime rm -f "$id" 2>/dev/null || true
-            fi
-        done <<< "$local_ids"
-    fi
-
-    local_ids=$($runtime ps -a --filter "name=cs-courses" --format "{{.Names}} {{.ID}}" 2>/dev/null) || true
-    if [[ -n "$local_ids" ]]; then
-        while read -r name id; do
-            if [[ -n "$name" ]]; then
-                $runtime stop "$id" 2>/dev/null || true
-                $runtime rm -f "$id" 2>/dev/null || true
-            fi
-        done <<< "$local_ids"
-    fi
-
-    log_info "Removing CCC Podman images..."
-    local_ids=$($runtime images --filter "reference=ccc*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null) || true
-    if [[ -n "$local_ids" ]]; then
-        while read -r ref id; do
-            if [[ -n "$ref" ]]; then
-                $runtime rmi -f "$id" 2>/dev/null || true
-            fi
-        done <<< "$local_ids"
-    fi
-
-    local_ids=$($runtime images --filter "reference=cs-courses*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null) || true
-    if [[ -n "$local_ids" ]]; then
-        while read -r ref id; do
-            if [[ -n "$ref" ]]; then
-                $runtime rmi -f "$id" 2>/dev/null || true
-            fi
-        done <<< "$local_ids"
-    fi
-
-    log_info "Removing CCC Podman networks..."
-    for net in net-ccc net-cs-courses; do
-        if $runtime network inspect "$net" >/dev/null 2>&1; then
-            $runtime network rm "$net" 2>/dev/null || true
-        fi
-    done
-}
-
 # Check permissions based on detected installation
 check_permissions() {
     if [[ "$INSTALL_MODE" == "system" ]]; then
@@ -158,8 +102,6 @@ remove_files() {
         log_success "Removed $SHARE_DIR"
     fi
 
-    remove_podman_artifacts
-
     # Remove shell PATH edits added by the installer for user-local installs.
     if [[ "$INSTALL_MODE" == "user" ]]; then
         local shell_profile=""
@@ -220,11 +162,10 @@ show_post_uninstall_info() {
         echo "What was removed:"
         echo "• CCC executable and files"
         echo "• CCC configuration"
-        echo "• CCC Podman containers, images, and networks"
         echo ""
         echo "What was NOT removed (if you want to clean these up manually):"
         echo "• Course directories (user data)"
-        echo "• Podman volumes and unrelated resources"
+        echo "• Podman containers and images"
     else
         echo "What was NOT removed (if you want to clean these up manually):"
         echo "• Course directories (user data)"
