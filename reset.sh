@@ -6,15 +6,43 @@ set -euo pipefail
 
 echo "Resetting CCC development environment..."
 
+confirm_reset() {
+    if [[ ! -t 0 ]]; then
+        echo "This reset is destructive. Re-run from an interactive terminal to confirm, or cancel now." >&2
+        exit 1
+    fi
+
+    echo "This will remove CCC containers, images, networks, config, installed files, and generated runtime files inside your courses directory."
+    read -r -p "Continue with full CCC reset? [y/N] " REPLY
+    case "$REPLY" in
+        [yY]|[yY][eE][sS])
+            ;;
+        *)
+            echo "Reset cancelled."
+            exit 0
+            ;;
+    esac
+}
+
+confirm_reset
+
 # Set up paths and source libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$SCRIPT_DIR/share/utils.sh"
+source "$SCRIPT_DIR/share/config.sh"
 
 if [[ -f "$SCRIPT_DIR/share/container_helpers.sh" ]]; then
     source "$SCRIPT_DIR/share/container_helpers.sh"
 else
     log_error "Missing share/container_helpers.sh"
+    exit 1
+fi
+
+if [[ -f "$SCRIPT_DIR/share/cleanup.sh" ]]; then
+    source "$SCRIPT_DIR/share/cleanup.sh"
+else
+    log_error "Missing share/cleanup.sh"
     exit 1
 fi
 
@@ -83,31 +111,40 @@ for net in "net-ccc" "net-cs-courses"; do
     fi
 done
 
-# 4. Clean up configuration and courses directory
-log_info "Cleaning up CCC configuration and courses..."
+# 4. Clean up configuration and course runtime files
+log_info "Cleaning up CCC configuration and course runtime files..."
 
 # Read courses directory from config before removing it
 courses_dir=""
-if [[ -f "$HOME/.config/ccc/config" ]]; then
-    source "$HOME/.config/ccc/config" 2>/dev/null || true
-    courses_dir="${COURSES_DIR:-}"
+if [[ -f "$(get_config_file)" ]]; then
+    load_config 2>/dev/null || true
+    courses_dir="${CCC_COURSES_DIR:-${COURSES_DIR:-}}"
 fi
 
-# Remove courses directory (if configured)
+# Remove generated CCC files from each course directory, but keep the
+# configured courses directory and the course repositories themselves.
 if [[ -n "$courses_dir" ]] && [[ -d "$courses_dir" ]]; then
-    echo "  Removing configured courses directory: $courses_dir"
-    rm -rf "$courses_dir"
+    echo "  Cleaning generated CCC files under: $courses_dir"
+    for course_dir in "$courses_dir"/*; do
+        [[ -d "$course_dir" ]] || continue
+        remove_course_runtime_files "$course_dir"
+    done
 elif [[ -d "./courses" ]]; then
-    echo "  Removing local courses directory: ./courses"
-    rm -rf "./courses"
+    echo "  Cleaning generated CCC files under: ./courses"
+    for course_dir in ./courses/*; do
+        [[ -d "$course_dir" ]] || continue
+        remove_course_runtime_files "$course_dir"
+    done
 fi
 
 # Remove configuration file
-if [[ -f "$HOME/.config/ccc/config" ]]; then
-    echo "  Removing CCC configuration: $HOME/.config/ccc/config"
-    rm -f "$HOME/.config/ccc/config"
+config_file="$(get_config_file)"
+config_dir="$(dirname "$config_file")"
+if [[ -f "$config_file" ]]; then
+    echo "  Removing CCC configuration: $config_file"
+    rm -f "$config_file"
     # Remove directory if empty
-    rmdir "$HOME/.config/ccc" 2>/dev/null || true
+    rmdir "$config_dir" 2>/dev/null || true
 fi
 
 # 5. Clean up generated Dockerfiles
@@ -152,8 +189,7 @@ echo "To reinstall CCC:"
 echo "  ./install.sh"
 echo ""
 echo "To start fresh:"
-echo "  ccc init"
-echo "  ccc run default"
+echo "  ccc open [course id]"
 
 # Optional: Show current status
 echo ""
