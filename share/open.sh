@@ -11,19 +11,17 @@
 build_course_shell_command() {
     course_id="$1"
     course_dir="/courses/$course_id"
-    course_env_file="/courses/$course_id/env/course.env"
+    course_env_file="/courses/$course_id/dev-specs/env/course.env"
     printf "mkdir -p '%s' && cd '%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l" "$course_dir" "$course_dir" "$course_env_file" "$course_env_file"
 }
 
 ccc_cleanup_environment() {
     reason=${1:-shell-exit}
-    exit_code=${2:-0}
-    clear_session
     export CCC_MANAGED_ENV=false
     if [ "$reason" != "shell-exit" ]; then
         echo "Cleaning up stale course environment ($reason)" >&2
     fi
-    return "$exit_code"
+    return "${2:-0}"
 }
 
 is_managed_environment() {
@@ -41,8 +39,8 @@ report_installer_failure() {
 
     echo "Course installer failed for $course_id (exit code: $rc)." >&2
     echo "Check install logs for details:" >&2
-    echo "  Host: $host_course_dir/setup/install.log" >&2
-    echo "  Container: $container_course_dir/setup/install.log" >&2
+    echo "  Host: $host_course_dir/dev-specs/setup/install.log" >&2
+    echo "  Container: $container_course_dir/dev-specs/setup/install.log" >&2
 }
 
 sync_course_checkout() {
@@ -192,20 +190,19 @@ ccc_open() {
         echo "Usage: ccc open <course> [--local] [--no-shell]" >&2
         return 2
     fi
-
+    # Do not allow nested shells
+    if is_managed_environment; then
+        echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
+        return 1
+    fi
     course_dir="$CCC_COURSES_DIR/$course_id"
-    mkdir -p "$CCC_COURSES_DIR" || return 1
+    mkdir -p "$course_dir" || return 1
 
     # Ensure course exists in registry
     ensure_course_exists "$course_id" || return 1
 
     # Clone on first open, otherwise optionally update existing checkouts.
-    sync_course_checkout "$course_id" "$course_dir" || return $?
-
-    if is_managed_environment; then
-        echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
-        return 1
-    fi
+    sync_course_checkout "$course_id" "$course_dir/dev-specs" || return $?
 
     # Detect whether the registry says this course requires a container.
     requires=$(get_course_requires_container "$course_id") || requires="true"
@@ -217,7 +214,6 @@ ccc_open() {
         # Local mode only opens the course directory and session; standardized
         # course setup is handled by the installer/manifests in container mode.
         export CCC_MANAGED_ENV=true
-        write_session "$course_id" "" "$$"
         if [ "$no_shell" = "true" ]; then
             echo "Opened $course_id (local, no-shell)"
             return 0
@@ -255,7 +251,6 @@ ccc_open() {
         host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
         container_course_dir="/courses/$course_id"
         mkdir -p "$host_course_dir" 2>/dev/null || true
-        write_session "$course_id" "$CONTAINER_NAME" ""
 
         # Use a fixed internal installer location that is independent of the
         # course repository layout. The installer reads

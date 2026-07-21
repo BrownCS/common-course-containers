@@ -66,15 +66,15 @@ export TMP_STATE_DIR="$TMP_STATE"
 export HOME="$TMP_HOME"
 
 course_dir="$TMP_HOME/course"
-mkdir -p "$course_dir/setup" "$course_dir/env"
-cat >"$course_dir/setup/packages.txt" <<'EOF'
+mkdir -p "$course_dir/dev-specs/setup" "$course_dir/dev-specs/env"
+cat >"$course_dir/dev-specs/setup/packages.txt" <<'EOF'
 installed-pkg
 missing-pkg
 EOF
-cat >"$course_dir/setup/links.txt" <<'EOF'
+cat >"$course_dir/dev-specs/setup/links.txt" <<'EOF'
 /bin/echo -> echo-copy
 EOF
-cat >"$course_dir/setup/env.txt" <<'EOF'
+cat >"$course_dir/dev-specs/setup/env.txt" <<'EOF'
 FOO=bar
 EOF
 
@@ -91,7 +91,7 @@ if grep -q 'installed-pkg' "$TMP_LOG"; then
   exit 2
 fi
 
-if [ ! -f "$course_dir/env/course.env" ] || ! grep -q 'export FOO="bar"' "$course_dir/env/course.env"; then
+if [ ! -f "$course_dir/dev-specs/env/course.env" ] || ! grep -q 'export FOO="bar"' "$course_dir/dev-specs/env/course.env"; then
   echo "FAIL: installer did not regenerate the env file" >&2
   exit 2
 fi

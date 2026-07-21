@@ -11,8 +11,8 @@ export HOME="$TMP_HOME"
 # Setup config to point courses dir to TMP_HOME/courses
 printf "%s\n%s\n" "$TMP_HOME/courses" "n" | prompt_init >/dev/null 2>&1
 
-# Add a fake registry entry directly to registry.csv for testing
-# We'll create a simple local git repo to clone
+# Add a fake registry entry directly to a temp registry for testing.
+# We'll create a simple local git repo to clone.
 mkdir -p "$TMP_HOME/local-repos/test-course"
 cd "$TMP_HOME/local-repos/test-course"
 git init -q
@@ -22,22 +22,20 @@ git add setup.sh >/dev/null 2>&1
 git commit -q -m "init" >/dev/null 2>&1
 repo_url="$TMP_HOME/local-repos/test-course"
 
-# Append to registry.csv temporarily (work on copy)
-# Copy registry to temp and append test entry, export CCC_REGISTRY_FILE for the run
-cp "$repo_root/registry.csv" "$TMP_HOME/registry.csv"
-printf "test-course,%s,Test Course,now,\n" "$repo_url" >>"$TMP_HOME/registry.csv"
+# Create a minimal temp registry and export it for the run.
+cat >"$TMP_HOME/registry.csv" <<EOF
+test-course,$repo_url,Test Course,now,
+EOF
 export CCC_REGISTRY_FILE="$TMP_HOME/registry.csv"
-# Point the code to use the temp registry by overriding repo_root in registry.sh logic
-# For test simplicity, we will call open_host with explicit course_dir operations
 
-# Call ccc open with --no-shell and ensure it clones and writes session
+# Call ccc open with --no-shell and ensure it opens without creating session state
 "$repo_root/ccc.sh" open test-course --no-shell >/dev/null 2>&1 || true
 
-# Check session file
+# Check session file is not created
 session_file=$(resolve_config_dir)/session.json
-if [ ! -f "$session_file" ]; then
-    echo "FAIL: session file not written"
+if [ -f "$session_file" ]; then
+    echo "FAIL: session file should not be written"
     exit 2
 fi
 
-echo "PASS: open_host created session"
+echo "PASS: open_host does not create session state"

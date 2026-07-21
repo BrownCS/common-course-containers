@@ -31,7 +31,7 @@ get_container_name() {
 get_image_name() {
   local course="${1:-}"
   if [[ -z "$course" ]]; then
-    echo "$IMAGE_NAME"
+    echo "${IMAGE_NAME:-ccc}"
     return
   fi
 
@@ -40,7 +40,7 @@ get_image_name() {
   if [[ "$image_mode" == "course-specific" ]]; then
     echo "ccc-${course}"
   else
-    echo "$IMAGE_NAME"
+    echo "${IMAGE_NAME:-ccc}"
   fi
 }
 

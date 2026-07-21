@@ -5,14 +5,25 @@
 set -eu
 
 COURSE_ROOT=${1:-/opt/course}
-SETUP_DIR="$COURSE_ROOT/setup"
+REPO_ROOT="$COURSE_ROOT/dev-specs"
+SETUP_DIR="$REPO_ROOT/setup"
 PACKAGES_FILE="$SETUP_DIR/packages.txt"
 LINKS_FILE="$SETUP_DIR/links.txt"
 ENV_FILE="$SETUP_DIR/env.txt"
 LOG_FILE="$SETUP_DIR/install.log"
+ENV_DIR="$REPO_ROOT/env"
+LINKS_MANIFEST="$SETUP_DIR/links.manifest"
+DESIRED_LINKS_MANIFEST="$SETUP_DIR/links.manifest.new"
 
 mkdir -p "$SETUP_DIR"
 : > "$LOG_FILE"
+: > "$DESIRED_LINKS_MANIFEST"
+
+cleanup_temp_links_manifest() {
+  rm -f "$DESIRED_LINKS_MANIFEST" "$LINKS_MANIFEST.tmp" "$LINKS_MANIFEST.new"
+}
+
+trap cleanup_temp_links_manifest EXIT HUP INT TERM
 
 log() {
   printf "%s\n" "$1" >> "$LOG_FILE"
@@ -86,6 +97,10 @@ create_symlink() {
   ln -sf "$src" "$dst"
 }
 
+record_link() {
+  printf '%s\n' "$1" >> "$DESIRED_LINKS_MANIFEST"
+}
+
 # Honor explicit links.txt if present
 if [ -f "$LINKS_FILE" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
@@ -108,8 +123,10 @@ if [ -f "$LINKS_FILE" ]; then
     mkdir -p "$(dirname "$target_path")"
     if [ -f "$src_path" ]; then
       create_symlink "$src_path" "$target_path"
+      record_link "$target_path"
       # Also create top-level canonical link
       create_symlink "$target_path" "$COURSE_BIN/$target"
+      record_link "$COURSE_BIN/$target"
     else
       log "explicit source not found: $src_path"
     fi
@@ -126,7 +143,9 @@ for f in /usr/bin/*x86_64-linux-gnu-*; do
   arch_dir="$COURSE_ROOT/bin.amd64/bin"
   mkdir -p "$arch_dir"
   create_symlink "$f" "$arch_dir/$canonical_nover"
+  record_link "$arch_dir/$canonical_nover"
   create_symlink "$arch_dir/$canonical_nover" "$COURSE_BIN/$canonical_nover"
+  record_link "$COURSE_BIN/$canonical_nover"
 done
 
 # Also handle binaries that end with -13 in /usr/bin (e.g. g++-13)
@@ -137,15 +156,30 @@ for f in /usr/bin/*-13; do
   arch_dir="$COURSE_ROOT/bin.native/bin"
   mkdir -p "$arch_dir"
   create_symlink "$f" "$arch_dir/$canonical_nover"
+  record_link "$arch_dir/$canonical_nover"
   create_symlink "$arch_dir/$canonical_nover" "$COURSE_BIN/$canonical_nover"
+  record_link "$COURSE_BIN/$canonical_nover"
 done
+
+if [ -f "$LINKS_MANIFEST" ]; then
+  while IFS= read -r old_link || [ -n "$old_link" ]; do
+    [ -n "$old_link" ] || continue
+    if ! grep -qxF "$old_link" "$DESIRED_LINKS_MANIFEST" 2>/dev/null; then
+      rm -f "$old_link" 2>/dev/null || true
+    fi
+  done < "$LINKS_MANIFEST"
+fi
+
+sort -u "$DESIRED_LINKS_MANIFEST" > "$LINKS_MANIFEST.tmp"
+mv "$LINKS_MANIFEST.tmp" "$LINKS_MANIFEST"
+rm -f "$DESIRED_LINKS_MANIFEST"
 
 log "Symlink creation complete"
 
 # Phase C: apply environment variables
 log "Applying environment variables"
-mkdir -p "$COURSE_ROOT/env"
-: > "$COURSE_ROOT/env/course.env"
+mkdir -p "$ENV_DIR"
+: > "$ENV_DIR/course.env"
 if [ -f "$ENV_FILE" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     line="$(printf '%s' "$line" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
@@ -155,13 +189,13 @@ if [ -f "$ENV_FILE" ]; then
       *=*) key="${line%%=*}" ; val="${line#*=}" ;;
       *) log "malformed env line: $line" ; continue ;;
     esac
-    printf 'export %s="%s"\n' "$key" "$val" >> "$COURSE_ROOT/env/course.env"
+    printf 'export %s="%s"\n' "$key" "$val" >> "$ENV_DIR/course.env"
   done < "$ENV_FILE"
 else
   log "No env file at $ENV_FILE"
 fi
 
-log "Environment applied; file at $COURSE_ROOT/env/course.env"
+log "Environment applied; file at $ENV_DIR/course.env"
 
 log "Installer finished successfully"
 exit 0

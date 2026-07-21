@@ -39,15 +39,11 @@ cleanup-course,https://example.invalid/cleanup-course.git,Cleanup Course,now,tru
 EOF
 
 course_dir="$CCC_COURSES_DIR/cleanup-course"
-mkdir -p "$course_dir/setup" "$course_dir/env"
+mkdir -p "$course_dir/dev-specs/setup" "$course_dir/dev-specs/env"
 printf 'repo content\n' >"$course_dir/README.md"
-: >"$course_dir/setup/install.log"
-: >"$course_dir/env/course.env"
+: >"$course_dir/dev-specs/setup/install.log"
+: >"$course_dir/dev-specs/env/course.env"
 : >"$course_dir/.ccc-installer-ran"
-
-session_dir="$(resolve_config_dir)"
-mkdir -p "$session_dir"
-printf '{"course":"cleanup-course","container_id":"ccc-cleanup-course","pid":"","start":"now"}\n' >"$session_dir/session.json"
 
 bash "$repo_root/ccc.sh" cleanup cleanup-course >/dev/null 2>&1
 
@@ -59,8 +55,11 @@ fi
 for path in \
   "$course_dir/.ccc-installer-ran" \
   "$course_dir/setup/install.log" \
+  "$course_dir/setup/applied-env.txt" \
+  "$course_dir/setup/links.manifest" \
   "$course_dir/env/course.env" \
-  "$session_dir/session.json"; do
+  "$course_dir/dev-specs/setup/install.log" \
+  "$course_dir/dev-specs/env/course.env"; do
   if [ -e "$path" ]; then
     echo "FAIL: cleanup left generated state behind: $path" >&2
     exit 2

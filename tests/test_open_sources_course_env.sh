@@ -61,7 +61,7 @@ if ! grep -q "default" "$TMPDIR/podman.log"; then
   exit 1
 fi
 
-if ! grep -q "/courses/csci-0300-demo/env/course.env" "$TMPDIR/podman.log"; then
+if ! grep -q "/courses/csci-0300-demo/dev-specs/env/course.env" "$TMPDIR/podman.log"; then
   echo "FAIL: open did not source the course env file in the shell command" >&2
   cat "$TMPDIR/podman.log" >&2
   exit 1
