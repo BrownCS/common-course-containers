@@ -96,7 +96,7 @@ if [ ! -f "$course_dir/dev-specs/env/course.env" ] || ! grep -q 'export FOO="bar
   exit 2
 fi
 
-if [ ! -L "$course_dir/bin/echo-copy" ]; then
+if [ ! -L "$course_dir/dev-specs/bin/echo-copy" ]; then
   echo "FAIL: installer did not refresh the requested symlink" >&2
   exit 2
 fi

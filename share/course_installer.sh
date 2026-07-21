@@ -14,10 +14,17 @@ LOG_FILE="$SETUP_DIR/install.log"
 ENV_DIR="$REPO_ROOT/env"
 LINKS_MANIFEST="$SETUP_DIR/links.manifest"
 DESIRED_LINKS_MANIFEST="$SETUP_DIR/links.manifest.new"
+BIN_ROOT="$REPO_ROOT/bin"
+LEGACY_BIN_ROOT="$COURSE_ROOT/bin"
+LEGACY_AMD64_BIN_ROOT="$COURSE_ROOT/bin.amd64"
+LEGACY_NATIVE_BIN_ROOT="$COURSE_ROOT/bin.native"
+LEGACY_ENV_ROOT="$COURSE_ROOT/env"
 
 mkdir -p "$SETUP_DIR"
 : > "$LOG_FILE"
 : > "$DESIRED_LINKS_MANIFEST"
+
+rm -rf "$LEGACY_BIN_ROOT" "$LEGACY_AMD64_BIN_ROOT" "$LEGACY_NATIVE_BIN_ROOT" "$LEGACY_ENV_ROOT"
 
 cleanup_temp_links_manifest() {
   rm -f "$DESIRED_LINKS_MANIFEST" "$LINKS_MANIFEST.tmp" "$LINKS_MANIFEST.new"
@@ -82,7 +89,7 @@ fi
 log "Discovering binaries and creating symlinks"
 
 # Ensure course bin root
-COURSE_BIN="$COURSE_ROOT/bin"
+COURSE_BIN="$BIN_ROOT"
 mkdir -p "$COURSE_BIN"
 
 # Helper to create symlink and record
@@ -119,7 +126,7 @@ if [ -f "$LINKS_FILE" ]; then
       arch_prefix="amd64"
       src_path="$src"
     fi
-    target_path="$COURSE_ROOT/bin.$arch_prefix/bin/$target"
+    target_path="$REPO_ROOT/bin.$arch_prefix/bin/$target"
     mkdir -p "$(dirname "$target_path")"
     if [ -f "$src_path" ]; then
       create_symlink "$src_path" "$target_path"
@@ -140,7 +147,7 @@ for f in /usr/bin/*x86_64-linux-gnu-*; do
   canonical="${base#x86_64-linux-gnu-}"
   # strip trailing -13 if present
   canonical_nover="$(printf '%s' "$canonical" | sed 's/-13$//')"
-  arch_dir="$COURSE_ROOT/bin.amd64/bin"
+  arch_dir="$REPO_ROOT/bin.amd64/bin"
   mkdir -p "$arch_dir"
   create_symlink "$f" "$arch_dir/$canonical_nover"
   record_link "$arch_dir/$canonical_nover"
@@ -153,7 +160,7 @@ for f in /usr/bin/*-13; do
   [ -f "$f" ] || continue
   base="$(basename "$f")"
   canonical_nover="$(printf '%s' "$base" | sed 's/-13$//')"
-  arch_dir="$COURSE_ROOT/bin.native/bin"
+  arch_dir="$REPO_ROOT/bin.native/bin"
   mkdir -p "$arch_dir"
   create_symlink "$f" "$arch_dir/$canonical_nover"
   record_link "$arch_dir/$canonical_nover"
@@ -194,6 +201,8 @@ if [ -f "$ENV_FILE" ]; then
 else
   log "No env file at $ENV_FILE"
 fi
+
+printf 'export PATH="%s/bin:$PATH"\n' "$REPO_ROOT" >> "$ENV_DIR/course.env"
 
 log "Environment applied; file at $ENV_DIR/course.env"
 

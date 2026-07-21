@@ -23,6 +23,16 @@ remove_course_runtime_files() {
     "$course_dir/dev-specs/setup/install.log" \
     "$course_dir/dev-specs/env/course.env" \
         2>/dev/null || true
+
+    rm -rf \
+    "$course_dir/bin" \
+    "$course_dir/bin.amd64" \
+    "$course_dir/bin.native" \
+    "$course_dir/env" \
+    "$course_dir/dev-specs/bin" \
+    "$course_dir/dev-specs/bin.amd64" \
+    "$course_dir/dev-specs/bin.native" \
+        2>/dev/null || true
 }
 
 remove_default_container_runtime_files() {
