@@ -94,6 +94,36 @@ allow_course_specific_base_image() {
   [[ "$mode" == "course-specific" ]]
 }
 
+validate_container_identity() {
+  local image_name="${1:-$IMAGE_NAME}"
+  local uid
+  local gid
+  local passwd_entry
+  local group_entry
+
+  uid="$(id -u)"
+  gid="$(id -g)"
+
+  if ! "$CONTAINER_RUNTIME" image exists "$image_name" &>/dev/null; then
+    return 0
+  fi
+
+  passwd_entry="$($CONTAINER_RUNTIME run --rm --entrypoint /bin/sh "$image_name" -lc "grep -E '^[^:]*:[^:]*:${uid}:' /etc/passwd | head -n 1" 2>/dev/null || true)"
+  group_entry="$($CONTAINER_RUNTIME run --rm --entrypoint /bin/sh "$image_name" -lc "grep -E '^[^:]*:[^:]*:${gid}:' /etc/group | head -n 1" 2>/dev/null || true)"
+
+  if [[ -n "$passwd_entry" || -n "$group_entry" ]]; then
+    echo_error "Host uid/gid conflict with numeric accounts in image '$image_name'."
+    if [[ -n "$passwd_entry" ]]; then
+      echo_error "  uid $uid already appears in /etc/passwd: $passwd_entry"
+    fi
+    if [[ -n "$group_entry" ]]; then
+      echo_error "  gid $gid already appears in /etc/group: $group_entry"
+    fi
+    echo_error "Choose a different host account or rebuild the image with non-conflicting ids."
+    return 1
+  fi
+}
+
 get_image_build_stamp() {
   local image_name="${1:-$IMAGE_NAME}"
   local stamp_file="$SCRIPT_DIR/.ccc-image-buildstamp-${image_name//[^A-Za-z0-9._-]/_}"
@@ -237,7 +267,9 @@ start_new_container() {
   setup_xhost
   create_network
 
+  local user="$(id -un)"
   local uid="$(id -u)"
+  local group="$(id -gn)"
   local gid="$(id -g)"
 
   VOLUME_PATH="${VOLUME_PATH:-${CCC_COURSES_DIR:-${HOME}/courses}}"
@@ -307,17 +339,14 @@ start_new_container() {
     --workdir "${CONTAINER_WORKDIR:-/courses}"
   )
 
-  # Use a portable --user uid:gid mapping unless START_AS_ROOT=1 is set.
-  # Starting as root is useful for running setup steps that require apt/sudo.
-  # Some environments (including this one) reject large or unmapped host IDs,
-  # so fall back to root in that case rather than failing container startup.
-  if [ "${START_AS_ROOT:-0}" = "1" ]; then
-    echo "Starting container as root (START_AS_ROOT=1)."
-  elif [ "$uid" -gt 60000 ] || [ "$gid" -gt 60000 ]; then
-    echo "Host UID/GID are outside the normal range; starting container as root."
-  else
-    run_args+=( --user "$uid:$gid" )
-  fi
+  # Keep the host user/group identity inside the container and let sudo work
+  # via the image's passwordless sudo configuration.
+  run_args+=(
+    --passwd
+    --group-entry "$group::$gid:$user"
+    --passwd-entry "$user::$uid:$gid:Default User:/home/$user:/bin/bash"
+    --userns "keep-id:uid=$uid,gid=$gid"
+  )
 
   # SSH agent forwarding
   # - On macOS with Docker Desktop, prefer the host-services socket.
@@ -333,6 +362,8 @@ start_new_container() {
     run_args+=( -v "$ssh_sock:$ssh_sock" )
     run_args+=( -e "SSH_AUTH_SOCK=$ssh_sock" )
   fi
+
+  validate_container_identity "$IMAGE_NAME" || return 1
 
   # X11 forwarding
   if [[ "$(uname)" == "Linux" ]]; then

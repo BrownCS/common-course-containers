@@ -259,7 +259,7 @@ ccc_open() {
         host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
         container_course_dir="${CONTAINER_WORKDIR:-/courses/$course_id}"
         echo "Running course installer inside container: $CONTAINER_NAME"
-        if "$CONTAINER_RUNTIME" exec -i --user 0 -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi" ; then
+        if "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi" ; then
             rc=0
         else
             rc=$?

@@ -33,22 +33,38 @@ EOF
 cat >"$TMP_BIN/apt-get" <<'EOF'
 #!/usr/bin/env sh
 printf '%s\n' "$*" >>"${TMP_LOG_FILE:?}"
-case "$1" in
-  install)
-    shift
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        -y|--no-install-recommends)
-          shift
-          ;;
-        *)
-          printf '%s\n' "$1" >>"${TMP_STATE_DIR:?}/installed.txt"
-          shift
-          ;;
-      esac
-    done
-    ;;
-esac
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    update)
+      exit 0
+      ;;
+    install)
+      shift
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          -y|--no-install-recommends|-o)
+            if [ "$1" = "-o" ]; then
+              shift 2
+            else
+              shift
+            fi
+            ;;
+          *)
+            printf '%s\n' "$1" >>"${TMP_STATE_DIR:?}/installed.txt"
+            shift
+            ;;
+        esac
+      done
+      exit 0
+      ;;
+    -o)
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 exit 0
 EOF
 
@@ -58,7 +74,13 @@ printf '%s\n' "$*" >>"${TMP_LOG_FILE:?}"
 exit 0
 EOF
 
+cat >"$TMP_BIN/sudo" <<'EOF'
+#!/usr/bin/env sh
+exec "$@"
+EOF
+
 chmod +x "$TMP_BIN/dpkg-query" "$TMP_BIN/apt-get" "$TMP_BIN/dpkg"
+chmod +x "$TMP_BIN/sudo"
 
 export PATH="$TMP_BIN:$PATH"
 export TMP_LOG_FILE="$TMP_LOG"

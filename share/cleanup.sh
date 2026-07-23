@@ -39,6 +39,7 @@ remove_default_container_runtime_files() {
     while IFS= read -r shared_course; do
         [ -n "$shared_course" ] || continue
         remove_course_runtime_files "$(get_course_dir "$shared_course")"
+        untrack_default_container_course "$shared_course"
     done <<EOF
 $(list_default_container_courses)
 EOF

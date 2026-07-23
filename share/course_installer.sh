@@ -41,6 +41,18 @@ package_is_installed() {
   dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q '^install ok installed$'
 }
 
+run_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    sudo env PATH="$PATH" "$@"
+  fi
+}
+
+apt_run() {
+  run_root apt-get -o Dpkg::Use-Pty=0 "$@"
+}
+
 # Phase A: install packages
 log "Starting package install"
 PACKAGES=""
@@ -70,13 +82,13 @@ if [ -n "$(printf '%s' "$MISSING_PACKAGES" | sed 's/[[:space:]]//g')" ]; then
 
   if [ "$HAS_AMD64" -eq 1 ]; then
     log "Detected amd64 packages; enabling amd64 multiarch"
-    dpkg --add-architecture amd64 2>>"$LOG_FILE" || true
-    apt-get update >>"$LOG_FILE" 2>&1 || true
+    run_root dpkg --add-architecture amd64 2>>"$LOG_FILE" || true
+    apt_run update >>"$LOG_FILE" 2>&1 || true
   fi
 
   log "Installing missing packages: $*"
-  apt-get update >>"$LOG_FILE" 2>&1 || true
-  apt-get install -y --no-install-recommends "$@" >>"$LOG_FILE" 2>&1 || {
+  apt_run update >>"$LOG_FILE" 2>&1 || true
+  apt_run install -y --no-install-recommends "$@" >>"$LOG_FILE" 2>&1 || {
     log "apt-get install failed"
     exit 1
   }

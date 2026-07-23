@@ -9,6 +9,11 @@ if ! grep -q 'export CCC_MANAGED_ENV=true' "$open_file"; then
   exit 2
 fi
 
+if grep -q -- '--user 0' "$open_file"; then
+  echo "FAIL: open flow still forces installer execution as root" >&2
+  exit 2
+fi
+
 if ! grep -q 'export CCC_MANAGED_ENV=false' "$open_file"; then
   echo "FAIL: open flow does not clear CCC_MANAGED_ENV=false on host-side exit" >&2
   exit 2
