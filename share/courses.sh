@@ -117,3 +117,24 @@ list_available_courses() {
   done < "$REGISTRY_FILE"
 }
 
+list_installed_courses() {
+  local courses_dir="${CCC_COURSES_DIR:-$HOME/courses}"
+  local found=0
+
+  echo "Installed courses:"
+
+  if [[ ! -d "$courses_dir" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r course_path; do
+    [[ -d "$course_path" ]] || continue
+    printf '  %s\n' "$(basename "$course_path")"
+    found=1
+  done < <(find "$courses_dir" -mindepth 1 -maxdepth 1 -type d | sort)
+
+  if [[ "$found" -eq 0 ]]; then
+    echo "  (none)"
+  fi
+}
+

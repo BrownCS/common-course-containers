@@ -90,8 +90,19 @@ case "${1:-}" in
     prompt_init
     exit 0 ;;
   list)
-    # list available courses from registry
-    registry_list
+    case "${2:-}" in
+      ""|--avail)
+        # list available courses from registry
+        registry_list
+        exit 0 ;;
+      --installed)
+        # list installed courses from the current courses directory
+        list_installed_courses
+        exit 0 ;;
+      *)
+        printf '%s\n' "Usage: ccc list [--avail|--installed]" >&2
+        exit 2 ;;
+    esac
     exit 0 ;;
   open)
     # ccc open <course> [--local] [--no-shell]

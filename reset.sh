@@ -7,11 +7,6 @@ set -euo pipefail
 echo "Resetting CCC development environment..."
 
 confirm_reset() {
-    if [[ ! -t 0 ]]; then
-        echo "This reset is destructive. Re-run from an interactive terminal to confirm, or cancel now." >&2
-        exit 1
-    fi
-
     echo "This will remove CCC containers, images, networks, config, installed files, and generated runtime files inside your courses directory."
     read -r -p "Continue with full CCC reset? [y/N] " REPLY
     case "$REPLY" in
@@ -67,18 +62,6 @@ if [[ -n "$local_ids" ]]; then
     done <<< "$local_ids"
 fi
 
-# Also remove old cs-courses containers if they exist
-local_ids=$($CONTAINER_RUNTIME ps -a --filter "name=cs-courses" --format "{{.Names}} {{.ID}}" 2>/dev/null) || true
-if [[ -n "$local_ids" ]]; then
-    while read -r name id; do
-        if [[ -n "$name" ]]; then
-            echo "  Removing old container: $name ($id)"
-            $CONTAINER_RUNTIME stop "$id" 2>/dev/null || true
-            $CONTAINER_RUNTIME rm -f "$id" 2>/dev/null || true
-        fi
-    done <<< "$local_ids"
-fi
-
 # 2. Remove all CCC images
 log_info "Removing all CCC images..."
 local_ids=$($CONTAINER_RUNTIME images --filter "reference=ccc*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null) || true
@@ -86,17 +69,6 @@ if [[ -n "$local_ids" ]]; then
     while read -r ref id; do
         if [[ -n "$ref" ]]; then
             echo "  Removing image: $ref ($id)"
-            $CONTAINER_RUNTIME rmi -f "$id" 2>/dev/null || true
-        fi
-    done <<< "$local_ids"
-fi
-
-# Also remove old cs-courses images
-local_ids=$($CONTAINER_RUNTIME images --filter "reference=cs-courses*" --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null) || true
-if [[ -n "$local_ids" ]]; then
-    while read -r ref id; do
-        if [[ -n "$ref" ]]; then
-            echo "  Removing old image: $ref ($id)"
             $CONTAINER_RUNTIME rmi -f "$id" 2>/dev/null || true
         fi
     done <<< "$local_ids"

@@ -6,9 +6,9 @@ set -euo pipefail
 BASE_DIR="${CCC_COURSES_BASE_DIR:-/courses}"
 
 # Load shared mode helpers if present
-if [[ -f "$SCRIPT_DIR/lib/mode_helpers.sh" ]]; then
+if [[ -f "$SCRIPT_DIR/mode_helpers.sh" ]]; then
   # shellcheck disable=SC1090
-  . "$SCRIPT_DIR/lib/mode_helpers.sh"
+  . "$SCRIPT_DIR/mode_helpers.sh"
   detect_arch_platform
 else
   ARCH="$(uname -m)"
