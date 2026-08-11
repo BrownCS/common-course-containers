@@ -272,6 +272,7 @@ show_post_install_info() {
     echo "  - See README.md or DOCS.md for full usage and course setup steps"
     echo ""
     echo "To uninstall: run the uninstall script from the repository"
+    echo "if this runs, upgrade WORKS!"
 }
 
 # Main installation function
