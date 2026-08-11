@@ -53,6 +53,14 @@ apt_run() {
   run_root apt-get -o Dpkg::Use-Pty=0 "$@"
 }
 
+# added august 6th, 2026 -- ccc open was breaking and this resolved it
+# appeared to be a package installation issue, not sure how it happened.
+repair_package_manager() {
+  log "Repairing package manager state if needed"
+  run_root dpkg --configure -a >>"$LOG_FILE" 2>&1 || true
+  run_root apt --fix-broken install -y >>"$LOG_FILE" 2>&1 || true
+}
+
 # Phase A: install packages
 log "Starting package install"
 PACKAGES=""
@@ -79,6 +87,8 @@ fi
 if [ -n "$(printf '%s' "$MISSING_PACKAGES" | sed 's/[[:space:]]//g')" ]; then
   # Convert missing packages into positional args safely.
   set -- $MISSING_PACKAGES
+
+  repair_package_manager
 
   if [ "$HAS_AMD64" -eq 1 ]; then
     log "Detected amd64 packages; enabling amd64 multiarch"

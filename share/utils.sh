@@ -43,52 +43,13 @@ is_container_environment() {
   [[ -f /etc/ccc-container ]]
 }
 
-# Backward-compatible wrapper for older callers.
-is_ccc_container() {
-  is_container_environment
-}
-
 # Configuration file management
 get_config_dir() {
   echo "$HOME/.config/ccc"
 }
 
-get_config_file() {
-  echo "$(get_config_dir)/config"
-}
-
 get_settings_file() {
   echo "$(get_config_dir)/settings"
-}
-
-save_courses_dir() {
-  local courses_dir="$1"
-  local config_dir="$(get_config_dir)"
-  local config_file="$(get_config_file)"
-
-  # Ensure config directory exists
-  mkdir -p "$config_dir"
-
-  # Convert to absolute path
-  courses_dir="$(realpath "$courses_dir")" # is realpath available to every system?
-
-  # Save to config file
-  echo "COURSES_DIR=$courses_dir" >"$config_file"
-}
-
-load_courses_dir() {
-  local config_file="$(get_config_file)"
-
-  if [[ -f "$config_file" ]]; then
-    # Source the config and return the courses directory
-    source "$config_file"
-    echo "$COURSES_DIR"
-  fi
-}
-
-has_courses_config() {
-  local config_file="$(get_config_file)"
-  [[ -f "$config_file" ]] && grep -q "^COURSES_DIR=" "$config_file"
 }
 
 # Version management
@@ -167,38 +128,59 @@ update_self() {
   fi
 
   echo "Newer version available: $latest_version"
-  echo "Downloading and running installer..."
+  echo "Downloading release archive and running installer..."
 
-  # Download installer
-  local installer_url="https://raw.githubusercontent.com/$CCC_UPDATE_REPO/v${latest_version}/install.sh"
-  local tmp_installer=$(mktemp)
+  local tarball_url="https://github.com/$CCC_UPDATE_REPO/archive/refs/tags/v${latest_version}.tar.gz"
+  local tmp_tar=$(mktemp)
+  local tmpdir=$(mktemp -d)
 
   if command -v curl >/dev/null 2>&1; then
-    if ! curl -sSfL "$installer_url" -o "$tmp_installer"; then
-      echo_error "Failed to download installer"
-      rm -f "$tmp_installer"
+    if ! curl -sSfL "$tarball_url" -o "$tmp_tar"; then
+      echo_error "Failed to download release archive"
+      rm -f "$tmp_tar"
+      rm -rf "$tmpdir"
       return 1
     fi
   elif command -v wget >/dev/null 2>&1; then
-    if ! wget -q "$installer_url" -O "$tmp_installer"; then
-      echo_error "Failed to download installer"
-      rm -f "$tmp_installer"
+    if ! wget -q -O "$tmp_tar" "$tarball_url"; then
+      echo_error "Failed to download release archive"
+      rm -f "$tmp_tar"
+      rm -rf "$tmpdir"
       return 1
     fi
   else
     echo_error "Neither curl nor wget available"
-    rm -f "$tmp_installer"
+    rm -f "$tmp_tar"
+    rm -rf "$tmpdir"
     return 1
   fi
 
-  # Run installer
-  chmod +x "$tmp_installer"
+  # Extract into temporary directory
+  if ! tar -xzf "$tmp_tar" -C "$tmpdir"; then
+    echo_error "Failed to extract release archive"
+    rm -f "$tmp_tar"
+    rm -rf "$tmpdir"
+    return 1
+  fi
+
+  rm -f "$tmp_tar"
+
+  # Find extracted directory and run its install.sh
+  local extracted_dir
+  extracted_dir=$(find "$tmpdir" -maxdepth 1 -mindepth 1 -type d | head -n1)
+  if [[ -z "$extracted_dir" ]] || [[ ! -f "$extracted_dir/install.sh" ]]; then
+    echo_error "Installer not found in release archive"
+    rm -rf "$tmpdir"
+    return 1
+  fi
+
+  chmod +x "$extracted_dir/install.sh"
   echo "Running installer for version $latest_version..."
-  "$tmp_installer"
+  (cd "$extracted_dir" && ./install.sh)
   local install_result=$?
 
   # Cleanup
-  rm -f "$tmp_installer"
+  rm -rf "$tmpdir"
 
   if [[ $install_result -eq 0 ]]; then
     echo "Successfully updated to version $latest_version"

@@ -37,7 +37,6 @@ source_lib "config"
 source_lib "registry"
 source_lib "courses"
 source_lib "container_helpers"
-source_lib "runtime"
 source_lib "session"
 # Make REGISTRY_FILE available to libraries that expect it
 REGISTRY_FILE="${registry_file:-$SCRIPT_DIR/registry.csv}"
@@ -128,6 +127,14 @@ case "${1:-}" in
     source_lib "cleanup"
     ccc_cleanup_course "$course" "$@"
     exit $? ;;
+  status)
+    # ccc status [course]
+    course="${2:-}"
+    shift || true
+    shift || true
+    source_lib "status"
+    ccc_status "$course" "$@"
+    exit $? ;;
   config)
     # ccc config get KEY | ccc config set KEY VALUE
     case "${2:-}" in
@@ -161,4 +168,8 @@ case "${1:-}" in
         printf '%s\n' "Usage: ccc config get|set" >&2
         exit 2 ;;
     esac ;;
+  upgrade)
+    # ccc upgrade -> run release-based updater (update_self)
+    update_self
+    exit $? ;;
 esac

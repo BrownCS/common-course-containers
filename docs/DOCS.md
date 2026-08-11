@@ -23,11 +23,15 @@ ccc run foo      starts persistent container
 
 | File                  | Role                                                                        |
 | --------------------- | --------------------------------------------------------------------------- |
-| ccc.sh                | Entry point; dispatches to the CLI wrapper and helper scripts in `share/`    |
+| bin/ccc               | Entry point; dispatches to the CLI wrapper and helper scripts in `share/`    |
 | share/utils.sh        | Logging, mode detection, config, and versioning utilities                   |
-| share/courses.sh      | Courses and registry management utilities                                   |
-| share/container_helpers.sh | Container setup utilities                                                |
-| share/host_mode.sh    | (removed) Host dispatcher was consolidated into `ccc.sh` and helper libs   |
-| share/container_mode.sh | (removed) Container dispatcher was consolidated into `ccc.sh` and helper libs |
+| share/config.sh       | Configuration read/write and defaults                                      |
+| share/registry.sh     | Registry parsing and lookup utilities                                       |
+| share/courses.sh      | Courses management and registry queries (course naming, image modes, etc.)   |
+| share/container_helpers.sh | Podman/Docker primitives (build, network, run, inspect)                |
+| share/open.sh         | Course environment orchestration (ccc open implementation)                 |
+| share/cleanup.sh      | Course cleanup and state removal (ccc cleanup implementation)              |
+| share/status.sh       | Status inspection and reporting (ccc status implementation)                |
+| share/session.sh      | Session and environment tracking utilities                                  |
 | Dockerfile.template   | Image definition                                                            |
 | registry.csv          | Course registry                                                             |

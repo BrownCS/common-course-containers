@@ -15,15 +15,6 @@ build_course_shell_command() {
     printf "mkdir -p '%s' && cd '%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l" "$course_dir" "$course_dir" "$course_env_file" "$course_env_file"
 }
 
-ccc_cleanup_environment() {
-    reason=${1:-shell-exit}
-    export CCC_MANAGED_ENV=false
-    if [ "$reason" != "shell-exit" ]; then
-        echo "Cleaning up stale course environment ($reason)" >&2
-    fi
-    return "${2:-0}"
-}
-
 is_managed_environment() {
     if [ "${CCC_MANAGED_ENV:-}" = "true" ]; then
         return 0
@@ -139,17 +130,15 @@ stop_container_for_course() {
 start_container_for_course() {
     course_id="$1"
 
-    # Determine image/container names
+    # Set image/container names
     CONTAINER_RUNTIME=$(detect_container_runtime) || return 2
     NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
-
-    # Ensure image/container name defaults exist so runtime helpers don't hit
-    # unbound-variable errors
     CCC_IMAGE_PREFIX="${CCC_IMAGE_PREFIX:-ccc}"
     IMAGE_NAME="${IMAGE_NAME:-$CCC_IMAGE_PREFIX}"
     CONTAINER_NAME="$(get_container_name "$course_id")"
 
     # Determine architecture/platform, defaulting to the machine architecture
+    # Note: get_course_container_arch also works, but its a bit more work
     PLATFORM="$(get_course_container_platform "$course_id")"
     case "$PLATFORM" in
       linux/arm64) ARCH="arm64" ;;
@@ -164,7 +153,7 @@ start_container_for_course() {
     build_image "$base_image" "$image_name" "$course_id" || return 3
 
     CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
-    start_new_container
+    start_or_reuse_container
     rc=$?
     if [ $rc -ne 0 ]; then
         echo "Failed to start container" >&2
@@ -177,20 +166,11 @@ ccc_open() {
     course_id="$1"
     shift || true
     mode="local"
-    no_shell=false
-    while [ "${1:-}" != "" ]; do
-        case "$1" in
-            --local) mode="local"; shift ;;
-            --no-shell) no_shell=true; shift ;;
-            *) shift ;;
-        esac
-    done
-
     if [ -z "$course_id" ]; then
         echo "Usage: ccc open <course> [--local] [--no-shell]" >&2
         return 2
     fi
-    # Do not allow nested shells
+    # Do not allow nested shells/course environments
     if is_managed_environment; then
         echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
         return 1
@@ -205,24 +185,20 @@ ccc_open() {
     sync_course_checkout "$course_id" "$course_dir/dev-specs" || return $?
 
     # Detect whether the registry says this course requires a container.
-    requires=$(get_course_requires_container "$course_id") || requires="true"
+    requires=$(get_course_requires_container "$course_id") || return 1
     if [ "$requires" = "true" ]; then
         mode="container"
     fi
     # Local Path
     if [ "$mode" = "local" ]; then
-        # Local mode only opens the course directory and session; standardized
-        # course setup is handled by the installer/manifests in container mode.
+        # Local mode isn't fully written yet, but the scaffold is here
+        # starts shell, but needs some course-specific installation later.
         export CCC_MANAGED_ENV=true
-        if [ "$no_shell" = "true" ]; then
-            echo "Opened $course_id (local, no-shell)"
-            return 0
-        fi
         echo "Entering local course directory: $course_dir"
         cd "$course_dir" || return 1
         "$SHELL" --login
         rc=$?
-        ccc_cleanup_environment "shell-exit" "$rc"
+        export CCC_MANAGED_ENV=false
         return "$rc"
     # Container Path
     else
@@ -266,16 +242,13 @@ ccc_open() {
         fi
         if [ "$rc" -ne 0 ]; then
             report_installer_failure "$course_id" "$host_course_dir" "$container_course_dir" "$rc"
+            # Stop the container to prevent reuse with broken state
+            "$CONTAINER_RUNTIME" stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
             return "$rc"
         fi
 
         if [ "$(get_course_image_mode "$course_id")" = "default" ]; then
             track_default_container_course "$course_id" || return $?
-        fi
-
-        if [ "$no_shell" = "true" ]; then
-            echo "Opened $course_id (container, no-shell)"
-            return 0
         fi
 
         shell_cmd="$(build_course_shell_command "$course_id")"
@@ -288,7 +261,7 @@ ccc_open() {
             "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "$shell_cmd"
             rc=$?
         fi
-        ccc_cleanup_environment "shell-exit" "$rc"
+        export CCC_MANAGED_ENV=false
         return "$rc"
     fi
 }

@@ -41,12 +41,3 @@ untrack_default_container_course() {
     fi
 }
 
-default_container_course_count() {
-    tracking_file=$(get_default_container_tracking_file 2>/dev/null || true)
-    if [ -z "$tracking_file" ] || [ ! -f "$tracking_file" ]; then
-        echo 0
-        return 0
-    fi
-
-    awk 'NF{count++} END{print count+0}' "$tracking_file"
-}

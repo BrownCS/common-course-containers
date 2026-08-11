@@ -8,7 +8,7 @@ set -euo pipefail
 #  - generate_dockerfile, validate_base_image, build_image
 #  - remove_image, remove_containers
 #  - do_xhost, setup_xhost
-#  - start_new_container
+#  - start_or_reuse_container
 #
 # Safety notes:
 #  - Defaults aim for user-mapped containers; avoid --privileged unless a course opts in.
@@ -263,7 +263,7 @@ setup_xhost() {
   fi
 }
 
-start_new_container() {
+start_or_reuse_container() {
   setup_xhost
   create_network
 
@@ -389,23 +389,5 @@ start_new_container() {
     run_rc=$?
     echo "Container runtime failed to start the container (rc=$run_rc)" >&2
     return $run_rc
-  fi
-
-  # Wait for the container to reach 'running' state if we started detached.
-  if [ "${START_DETACHED:-0}" = "1" ]; then
-    attempts=0
-    state=""
-    while [ $attempts -lt 20 ]; do
-      state=$($CONTAINER_RUNTIME inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || true)
-      if [ "$state" = "running" ]; then
-        break
-      fi
-      attempts=$((attempts + 1))
-      sleep 0.5
-    done
-    if [ "$state" != "running" ]; then
-      echo "Container created but did not reach running state (state=$state)" >&2
-      return 125
-    fi
   fi
 }

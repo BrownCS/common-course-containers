@@ -41,13 +41,11 @@ ccc run csci-0300-demo
 - `ccc run <course>` - Start/attach to course container
 
 ### Container Management
-- `ccc build` - Build container image
-- `ccc clean [containers|images|networks|all]` - Clean resources
-- `ccc status` - Show container status
+- `ccc status [course]` - Show container/course status (omit course for default container info)
+- `ccc cleanup <course>` - Remove course runtime state
 
 ### Tool Management
 - `ccc init` - Setup courses directory
-- `ccc upgrade` - Upgrade CCC tool
 
 ## Options
 

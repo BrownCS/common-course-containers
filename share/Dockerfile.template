@@ -41,7 +41,7 @@ COPY ccc /usr/local/bin/ccc
 COPY . /usr/local/share/ccc/
 RUN chmod 755 /usr/local/bin/ccc /usr/local/share/ccc/course_installer.sh || true && \
     chmod -R a+rX /usr/local/share/ccc || true
-# this was required for csci 1515 SEAL usage, consider removing
+# this next line was required for csci 1515 SEAL usage, consider removing
 RUN chmod o+w /usr/local /usr/local/lib /usr/local/include /usr/local/bin 2>/dev/null || true
 # Set custom zsh-like prompt as environment variable (works for all bash sessions)
 ENV PS1="\[\033[1;32m\][\u@\h]\[\033[0m\] \[\033[1;34m\]\w\[\033[0m\] "
