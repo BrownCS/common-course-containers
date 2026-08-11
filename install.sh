@@ -128,7 +128,7 @@ validate_source() {
     local required_files=(
         "bin/ccc"
         "share/registry.csv"
-        "share/VERSION"
+        "VERSION"
         "share/Dockerfile.template"
     )
 
@@ -272,7 +272,7 @@ show_post_install_info() {
     echo "  - See README.md or DOCS.md for full usage and course setup steps"
     echo ""
     echo "To uninstall: run the uninstall script from the repository"
-    echo "if this runs, upgrade WORKS!"
+    echo "if this runs, upgrade ACTUALLY WORKS!"
 }
 
 # Main installation function

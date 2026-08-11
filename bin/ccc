@@ -172,4 +172,9 @@ case "${1:-}" in
     # ccc upgrade -> run release-based updater (update_self)
     update_self
     exit $? ;;
+  --version)
+    # ccc upgrade -> run release-based updater (update_self)
+    get_version
+    echo ""
+    exit $? ;;
 esac
