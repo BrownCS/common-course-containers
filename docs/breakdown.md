@@ -153,7 +153,9 @@ This command routes to list_courses in courses.sh which prints all of the course
 
 This command routes to upgrade_course in course.sh, which effective calls `git pull` on the desired course to update the corresponding local repo
 
+#### ccc build
 
+This command routes to build_image in container.sh, which builds the image for the general shared container
 
 #### ccc clean [target]
 
@@ -161,7 +163,7 @@ This command routes to any combination of these three commands in container.sh: 
 
 #### ccc status
 
-This command routes to status.sh. Running `ccc status` shows the default container and which courses use it. Running `ccc status <course>` shows the repo checkout, image, and container state for that course.
+This command routes to check_container_runtime and show_course_status in runtime.sh. These print information about the container and the course image.
 
 #### ccc config
 

@@ -52,6 +52,20 @@ get_settings_file() {
   echo "$(get_config_dir)/settings"
 }
 
+detect_upgrade_mode() {
+  case "${SCRIPT_DIR:-}" in
+    /usr/local/share/ccc|/usr/local/bin/*)
+      printf '%s\n' "system"
+      ;;
+    "$HOME/.local/share/ccc"|"$HOME/.local/bin"/*)
+      printf '%s\n' "user"
+      ;;
+    *)
+      printf '%s\n' "user"
+      ;;
+  esac
+}
+
 # Version management
 get_version() {
   local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -109,6 +123,8 @@ get_latest_version() {
 
 # Self-update functionality using installer
 update_self() {
+  # first, compare current and local verisons
+  local install_mode="${1:-user}"
   echo "Checking for CCC updates..."
 
   local current_version="$(get_version)"
@@ -126,7 +142,7 @@ update_self() {
     echo "Already up to date"
     return 0
   fi
-
+  # get tarball from github repo, make temp dir, run install.sh
   echo "Newer version available: $latest_version"
   echo "Downloading release archive and running installer..."
 
@@ -174,9 +190,23 @@ update_self() {
     return 1
   fi
 
+  # run install.sh with proper mode (user or system)
+  # this is either inferred in ccc or explicitly given
   chmod +x "$extracted_dir/install.sh"
   echo "Running installer for version $latest_version..."
-  (cd "$extracted_dir" && ./install.sh)
+  if [[ "$install_mode" == "system" ]]; then
+    if [[ $EUID -eq 0 ]]; then
+      (cd "$extracted_dir" && ./install.sh --system)
+    elif command -v sudo >/dev/null 2>&1; then
+      (cd "$extracted_dir" && sudo ./install.sh --system)
+    else
+      echo_error "System upgrade requested but sudo is not available"
+      rm -rf "$tmpdir"
+      return 1
+    fi
+  else
+    (cd "$extracted_dir" && ./install.sh --user)
+  fi
   local install_result=$?
 
   # Cleanup

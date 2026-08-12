@@ -169,8 +169,30 @@ case "${1:-}" in
         exit 2 ;;
     esac ;;
   upgrade)
+    upgrade_mode="$(detect_upgrade_mode)"
+    shift || true
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --system)
+          upgrade_mode="system"
+          shift
+          ;;
+        --user)
+          upgrade_mode="user"
+          shift
+          ;;
+        --help|-h)
+          printf '%s\n' "Usage: ccc upgrade [--user|--system]" >&2
+          exit 0
+          ;;
+        *)
+          printf '%s\n' "Usage: ccc upgrade [--user|--system]" >&2
+          exit 2
+          ;;
+      esac
+    done
     # ccc upgrade -> run release-based updater (update_self)
-    update_self
+    update_self "$upgrade_mode"
     exit $? ;;
   --version)
     # ccc upgrade -> run release-based updater (update_self)

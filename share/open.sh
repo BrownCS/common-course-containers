@@ -163,6 +163,7 @@ start_container_for_course() {
 }
 
 ccc_open() {
+    echo "Version update working correctly"
     course_id="$1"
     shift || true
     mode="local"
