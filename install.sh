@@ -268,11 +268,11 @@ show_post_install_info() {
     fi
 
     echo "Next steps:"
-    echo "  - Initialize your courses directory:    ccc init"
-    echo "  - See README.md or DOCS.md for full usage and course setup steps"
+    echo "  - Initialize your courses directory and update preferences:    ccc init"
+    echo "  - Then open a course environment with ccc open [course id]"
+    echo "  - See README.md or DOCS.md for full usage and additional commands"
     echo ""
     echo "To uninstall: run the uninstall script from the repository"
-    echo "if this runs, upgrade ACTUALLY WORKS!"
 }
 
 # Main installation function

@@ -86,10 +86,8 @@ prompt_init() {
     esac
 
     # Write defaults
-    set_config CCC_INSTALL_MODE git
     set_config CCC_COURSES_DIR "$courses_dir"
     set_config CCC_AUTO_UPDATE "$auto_update"
-    set_config CCC_CONTAINER_REUSE false
 
     echo "Wrote configuration to $(get_config_file)"
 }

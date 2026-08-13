@@ -104,15 +104,32 @@ case "${1:-}" in
     esac
     exit 0 ;;
   open)
-    # ccc open <course> [--local] [--no-shell]
+    # ccc open <course> [--skip-installer]
     course="${2:-}"
     if [ -z "$course" ]; then
-      printf '%s\n' "Usage: ccc open <course> [--local] [--no-shell]" >&2
+      printf '%s\n' "Usage: ccc open <course> [--skip-installer]" >&2
       exit 2
     fi
-    # shift past 'open' and the course name
     shift 2 || true
-    # load open helper (required)
+    CCC_SKIP_INSTALLER=false
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --skip-installer)
+          CCC_SKIP_INSTALLER=true
+          shift
+          ;;
+        --help|-h)
+          printf '%s\n' "Usage: ccc open <course> [--skip-installer]" >&2
+          exit 0
+          ;;
+        *)
+          printf '%s\n' "Usage: ccc open <course> [--skip-installer]" >&2
+          exit 2
+          ;;
+      esac
+    done
+    export CCC_SKIP_INSTALLER
+    # load open helper 
     source_lib "open"
     ccc_open "$course" "$@"
     exit $? ;;
@@ -169,6 +186,7 @@ case "${1:-}" in
         exit 2 ;;
     esac ;;
   upgrade)
+    # ccc upgrade -> run release-based updater (update_self)
     upgrade_mode="$(detect_upgrade_mode)"
     shift || true
     while [[ $# -gt 0 ]]; do
@@ -191,11 +209,10 @@ case "${1:-}" in
           ;;
       esac
     done
-    # ccc upgrade -> run release-based updater (update_self)
     update_self "$upgrade_mode"
     exit $? ;;
   --version)
-    # ccc upgrade -> run release-based updater (update_self)
+    #Print the current CCC version
     get_version
     echo ""
     exit $? ;;

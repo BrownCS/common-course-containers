@@ -1,18 +1,21 @@
 #!/usr/bin/env sh
 # Unified open flow for CCC (local and container)
 # Functions:
-#  - ccc_open <course_id> [--local] [--no-shell]
-
-## NOTE: `share/open.sh` is a small orchestrator expected to be sourced by
-## `ccc.sh`. `ccc.sh` should set `SCRIPT_DIR` and pre-load core libraries
-## (utils, config, registry, courses, runtime, session). This file intentionally
-## avoids re-sourcing those libraries to stay minimal.
+#  - ccc_open <course_id>
 
 build_course_shell_command() {
     course_id="$1"
-    course_dir="/courses/$course_id"
-    course_env_file="/courses/$course_id/dev-specs/env/course.env"
-    printf "mkdir -p '%s' && cd '%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true; export CCC_COURSES_DIR=/courses; exec bash -l" "$course_dir" "$course_dir" "$course_env_file" "$course_env_file"
+    course_dir="${CCC_COURSES_DIR:-/courses}/$course_id"
+    course_env_file="${CCC_COURSES_DIR:-/courses}/$course_id/dev-specs/env/course.env"
+    # the npm config cache stuff was the only way to get around 
+    # npm permissions issues I was experiencing with 1380
+    printf "mkdir -p '%s' && cd '%s' && if [ -f '%s' ]; then . '%s'; fi; export CCC_MANAGED_ENV=true && export CCC_COURSES_DIR='%s' && export npm_config_cache=/tmp/.npm-cache && mkdir -p /tmp/.npm-cache && exec bash -l" "$course_dir" "$course_dir" "$course_env_file" "$course_env_file" "${CCC_COURSES_DIR:-/courses}"
+}
+
+build_skip_installer_shell_command() {
+    course_id="$1"
+    course_dir="${CCC_COURSES_DIR:-/courses}/$course_id"
+    printf "mkdir -p '%s' && cd '%s' && export CCC_MANAGED_ENV=true && export CCC_COURSES_DIR='%s' && export npm_config_cache=/tmp/.npm-cache && mkdir -p /tmp/.npm-cache && exec bash -l" "$course_dir" "$course_dir" "${CCC_COURSES_DIR:-/courses}"
 }
 
 is_managed_environment() {
@@ -32,6 +35,7 @@ report_installer_failure() {
     echo "Check install logs for details:" >&2
     echo "  Host: $host_course_dir/dev-specs/setup/install.log" >&2
     echo "  Container: $container_course_dir/dev-specs/setup/install.log" >&2
+    echo "If you only need a shell, rerun with --skip-installer." >&2
 }
 
 sync_course_checkout() {
@@ -116,10 +120,6 @@ stop_container_for_course() {
         return 0
     fi
 
-    if command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 2>/dev/null; then
-        :
-    fi
-
     if [ -n "${CONTAINER_RUNTIME:-}" ]; then
         if "$CONTAINER_RUNTIME" container exists "$container_name" >/dev/null 2>&1; then
             "$CONTAINER_RUNTIME" stop "$container_name" >/dev/null 2>&1 || true
@@ -130,12 +130,13 @@ stop_container_for_course() {
 start_container_for_course() {
     course_id="$1"
 
-    # Set image/container names
+    # Set runtime and network
     CONTAINER_RUNTIME=$(detect_container_runtime) || return 2
     NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
-    CCC_IMAGE_PREFIX="${CCC_IMAGE_PREFIX:-ccc}"
-    IMAGE_NAME="${IMAGE_NAME:-$CCC_IMAGE_PREFIX}"
+
+    # Compute course-aware names upfront (handles both default and course-specific containers)
     CONTAINER_NAME="$(get_container_name "$course_id")"
+    IMAGE_NAME="$(get_image_name "$course_id")"
 
     # Determine architecture/platform, defaulting to the machine architecture
     # Note: get_course_container_arch also works, but its a bit more work
@@ -148,11 +149,11 @@ start_container_for_course() {
 
     # Build or pull image based on registry image mode
     base_image=$(get_course_build_base_image "$course_id") || base_image="$CCC_DEFAULT_BASE_IMAGE"
-    image_name="$(get_image_name "$course_id")"
+    build_image "$base_image" "$IMAGE_NAME" "$course_id" || return 3
 
-    build_image "$base_image" "$image_name" "$course_id" || return 3
-
-    CONTAINER_WORKDIR="${CCC_MOUNT_PATH:-/courses}/$course_id"
+    # Set container mount and workdir to match the host courses directory for consistency
+    CONTAINER_MOUNT_PATH="${CCC_COURSES_DIR:-/courses}"
+    CONTAINER_WORKDIR="$CONTAINER_MOUNT_PATH/$course_id"
     start_or_reuse_container
     rc=$?
     if [ $rc -ne 0 ]; then
@@ -163,14 +164,13 @@ start_container_for_course() {
 }
 
 ccc_open() {
-    echo "Version update working correctly"
     course_id="$1"
-    shift || true
     mode="local"
     if [ -z "$course_id" ]; then
-        echo "Usage: ccc open <course> [--local] [--no-shell]" >&2
+        echo "Usage: ccc open <course> [--skip-installer]" >&2
         return 2
     fi
+
     # Do not allow nested shells/course environments
     if is_managed_environment; then
         echo "You are already inside another CCC-managed course environment. Exit it first before opening $course_id." >&2
@@ -218,8 +218,34 @@ ccc_open() {
             esac
         fi
 
+        # For course-specific containers, always skip the installer (the course image handles setup)
+        image_mode="$(get_course_image_mode "$course_id")" || image_mode="default"
+        if [ "$image_mode" = "course-specific" ]; then
+            CCC_SKIP_INSTALLER=true
+            echo "Using course-specific container image; skipping CCC installer."
+        fi
+
+        if [ "${CCC_SKIP_INSTALLER:-false}" = "true" ]; then
+            if [ ! -t 0 ]; then
+                echo "Aborting: --skip-installer requires interactive confirmation." >&2
+                return 1
+            fi
+            printf "Skip the course installer and open a shell anyway? [y/N] "
+            read -r _skip_ans
+            case "${_skip_ans:-n}" in
+                [yY]|[yY][eE][sS])
+                    ;;
+                *)
+                    echo "Aborting: installer skip not confirmed." >&2
+                    return 1
+                    ;;
+            esac
+            echo "Skipping course installer at your request; the environment may be incomplete."
+        fi
+
         # start or reuse the container first, then run the
         # standardized course installer inside the running container.
+        export CONTAINER_MOUNT_PATH="${CCC_COURSES_DIR:-/courses}"
         start_container_for_course "$course_id" || return $?
 
         # Ensure runtime vars are set by start_container_for_course
@@ -233,26 +259,32 @@ ccc_open() {
         # course repository layout. The installer reads
         # `setup/packages.txt`, `setup/links.txt`, and `setup/env.txt`.
         INSTALLER_PATH="/usr/local/share/ccc/course_installer.sh"
-        host_course_dir="${CCC_COURSES_DIR:-$HOME/courses}/$course_id"
-        container_course_dir="${CONTAINER_WORKDIR:-/courses/$course_id}"
-        echo "Running course installer inside container: $CONTAINER_NAME"
-        if "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi" ; then
-            rc=0
-        else
-            rc=$?
-        fi
-        if [ "$rc" -ne 0 ]; then
-            report_installer_failure "$course_id" "$host_course_dir" "$container_course_dir" "$rc"
-            # Stop the container to prevent reuse with broken state
-            "$CONTAINER_RUNTIME" stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-            return "$rc"
+        container_course_dir="${CONTAINER_WORKDIR}"
+
+        if [ "${CCC_SKIP_INSTALLER:-false}" != "true" ]; then
+            echo "Running course installer inside container: $CONTAINER_NAME"
+            if "$CONTAINER_RUNTIME" exec -i -e CCC_MANAGED_ENV=true -e CCC_COURSES_DIR=/courses "$CONTAINER_NAME" bash -lc "if [ -x '$INSTALLER_PATH' ]; then '$INSTALLER_PATH' '$container_course_dir'; else echo 'Installer not found at $INSTALLER_PATH' >&2; exit 2; fi" ; then
+                rc=0
+            else
+                rc=$?
+            fi
+            if [ "$rc" -ne 0 ]; then
+                report_installer_failure "$course_id" "$host_course_dir" "$container_course_dir" "$rc"
+                # Stop the container to prevent reuse with broken state
+                "$CONTAINER_RUNTIME" stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+                return "$rc"
+            fi
         fi
 
         if [ "$(get_course_image_mode "$course_id")" = "default" ]; then
             track_default_container_course "$course_id" || return $?
         fi
 
-        shell_cmd="$(build_course_shell_command "$course_id")"
+        if [ "${CCC_SKIP_INSTALLER:-false}" = "true" ]; then
+            shell_cmd="$(build_skip_installer_shell_command "$course_id")"
+        else
+            shell_cmd="$(build_course_shell_command "$course_id")"
+        fi
 
         echo "Attaching to container: $CONTAINER_NAME"
         if [ -t 0 ] && [ -t 1 ]; then

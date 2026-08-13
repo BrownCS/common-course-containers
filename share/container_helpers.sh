@@ -322,6 +322,7 @@ start_or_reuse_container() {
     esac
     # fall through to create a new container
   fi
+  # memory-swap added Aug 13 to help with large package installs
   local run_args=(
     "$run_cmd" "$run_verb"
     --detach
@@ -335,8 +336,9 @@ start_or_reuse_container() {
     --security-opt seccomp=unconfined
     --cap-add=SYS_PTRACE
     --cap-add=NET_ADMIN
-    --volume "$VOLUME_PATH":/courses
-    --workdir "${CONTAINER_WORKDIR:-/courses}"
+    --memory-swap -1
+    --volume "$VOLUME_PATH":"${CONTAINER_MOUNT_PATH:-/courses}"
+    --workdir "${CONTAINER_WORKDIR:-${CONTAINER_MOUNT_PATH:-/courses}}"
   )
 
   # Keep the host user/group identity inside the container and let sudo work
