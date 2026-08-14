@@ -45,13 +45,21 @@ REGISTRY_FILE="${registry_file:-$SCRIPT_DIR/registry.csv}"
 load_config 2>/dev/null || true
 export CCC_MANAGED_ENV=${CCC_MANAGED_ENV:-false}
 
-# Default courses directory for both host and container environments.
-# In containers, the mounted courses tree should be available at /courses.
+# If courses directory isn't set and is an interactive command (i.e, ccc open)
+# require user to set it
 if [ -z "${CCC_COURSES_DIR:-}" ]; then
   if is_container_environment; then
     export CCC_COURSES_DIR="/courses"
   else
-    export CCC_COURSES_DIR="${HOME}/courses"
+    case "${1:-}" in
+      --version|list|config|auto-update|init|upgrade)
+        export CCC_COURSES_DIR="${HOME}/courses"
+        ;;
+      *)
+        prompt_init
+        load_config 2>/dev/null || true
+        ;;
+    esac
   fi
 fi
 
