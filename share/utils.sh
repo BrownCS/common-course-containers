@@ -44,12 +44,13 @@ is_container_environment() {
 }
 
 # Configuration file management
+# Single source of truth: use the same config path as config.sh.
 get_config_dir() {
-  echo "$HOME/.config/ccc"
+  resolve_config_dir 2>/dev/null || echo "$HOME/.config/ccc"
 }
 
 get_settings_file() {
-  echo "$(get_config_dir)/settings"
+  get_config_file 2>/dev/null || echo "$(get_config_dir)/config"
 }
 
 detect_upgrade_mode() {
@@ -110,7 +111,6 @@ version_compare() {
 # Get latest version from GitHub releases
 get_latest_version() {
   local repo_url="$CCC_UPDATE_API_URL"
-
   if command -v curl >/dev/null 2>&1; then
     curl -s "$repo_url" 2>/dev/null | grep '"tag_name"' | sed 's/.*"v\?\([^"]*\)".*/\1/' 2>/dev/null
   elif command -v wget >/dev/null 2>&1; then
@@ -227,9 +227,9 @@ load_settings() {
   CCC_NETWORK_NAME="${CCC_NETWORK_NAME:-net-ccc}"
   CCC_DEFAULT_BASE_IMAGE="${CCC_DEFAULT_BASE_IMAGE:-ubuntu:noble}"
   CCC_MOUNT_PATH="${CCC_MOUNT_PATH:-/courses}"
-  CCC_UPDATE_REPO="${CCC_UPDATE_REPO:-BrownCS/common-course-containers}"
+  CCC_UPDATE_REPO="${CCC_UPDATE_REPO:-BrownCS/common-course-configuration}"
 
-  # Load user settings if they exist (only on host, not in container)
+  # Load user config if it exists (single config file). This is shared with config.sh.
   local settings_file="$(get_settings_file)"
   if [[ -f "$settings_file" ]]; then
     source "$settings_file"
@@ -246,7 +246,7 @@ create_default_settings() {
   # Ensure config directory exists
   mkdir -p "$config_dir"
 
-  # Create default settings file if it doesn't exist
+  # Create default config file if it doesn't exist.
   if [[ ! -f "$settings_file" ]]; then
     cat > "$settings_file" << 'EOF'
 # CCC Settings Configuration
@@ -259,7 +259,7 @@ CCC_DEFAULT_BASE_IMAGE=ubuntu:noble
 CCC_MOUNT_PATH=/courses
 
 # Update Repository
-CCC_UPDATE_REPO=BrownCS/common-course-containers
+CCC_UPDATE_REPO=BrownCS/common-course-configuration
 
 # Uncomment and modify any settings you want to customize
 # CCC_IMAGE_PREFIX=my-ccc

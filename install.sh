@@ -277,7 +277,7 @@ show_post_install_info() {
 
 # Main installation function
 main() {
-    echo "CCC (Common Course Containers) Installer v$VERSION"
+    echo "CCC (Common Course Configuration) Installer v$VERSION"
     echo "=============================================="
     echo ""
 

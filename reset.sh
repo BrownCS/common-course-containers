@@ -109,7 +109,7 @@ elif [[ -d "./courses" ]]; then
     done
 fi
 
-# Remove configuration file
+# Remove configuration file(s)
 config_file="$(get_config_file)"
 config_dir="$(dirname "$config_file")"
 if [[ -f "$config_file" ]]; then

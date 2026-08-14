@@ -4,124 +4,69 @@ Quick guide for TAs to set up courses in the CCC system.
 
 ## Required Files
 
-Your course repo needs these two files:
+Your course repo needs a `/setup` directory that houses these three files:
 
-### 1. `.envrc` (Environment Variables)
+### 1. `/setup/packages.txt` (Course Packages)
+
+This file holds a list of packages to be installed. It could look something like this:
 ```bash
-# Standard environment (don't change these)
-export DEBIAN_FRONTEND=noninteractive
-export TZ=America/New_York
-export LANG=en_US.UTF-8 # TODO: why do we need this tho?
-export PATH=$PWD/bin:$PATH
-
-# Course-specific additions (customize below)
-# export COURSE_VAR=value
-# alias submit="./submit.sh"
-# alias grade="python3 grader.py"
-
-source_env setup/entrypoint.sh
+inutils-doc
+cpp-doc
+gcc-doc
+g++
+g++-multilib
+gdb
+gdb-doc
+glibc-doc
+make
+make-doc
+clang
+clang-18-doc
+...
 ```
 
-### 2. `setup/entrypoint.sh` (Container Entry Script)
+### 2. `setup/links.txt` (Course Symlinks)
+
+This file holds a list of symlinks to be set. It can often be left empty! It could look like this:
 ```bash
-#!/bin/sh
-set -e
+/usr/bin/x86_64-linux-gnu-addr2line -> addr2line
+/usr/bin/x86_64-linux-gnu-c++filt -> c++filt
+/usr/bin/x86_64-linux-gnu-cpp-13 -> cpp
+/usr/bin/x86_64-linux-gnu-g++-13 -> c++
+/usr/bin/x86_64-linux-gnu-g++-13 -> g++
+/usr/bin/x86_64-linux-gnu-gcc-13 -> gcc
+/usr/bin/x86_64-linux-gnu-gcc-13 -> cc
+/usr/bin/gdb-multiarch -> gdb
+```
 
-version_file=/etc/image-version
-
-echo "***************************************************************************************"
-if [ -e "${version_file}" ]; then
-  echo "Starting container: $(cat ${version_file})"
-fi
-echo "Course: YOUR_COURSE_NAME"
-echo "Container IP: $(hostname --ip-address)"
-echo "***************************************************************************************"
-
-# Add any course-specific startup commands here
-# echo "Welcome to CSCI-XXXX!"
-# echo "Available commands: submit, test, grade"
+### 3. `setup/env.txt` (Course Environment Variable)\
+This file holds a list of course environment variables to be loaded into the course shell. It could look like this:
+```bash
+TZ=America/New_York
+LANG=en_US.UTF-8
+CARGO_HOME=/opt/rust
+RUSTUP_HOME=/opt/rust
+PATH=$PATH:/opt/rust/bin
 ```
 
 ## Setup Steps
 
-1. **Copy template files** to your course repo
-2. **Customize** the commented sections above
-3. **Add to registry** (contact admin) with optional base image:
-   ```
-   your-course,https://github.com/yourorg/course-repo.git,Course Name,semester
-   ```
-4. **For custom base images** (optional):
-   ```
-   your-course,https://github.com/yourorg/course-repo.git,Course Name,semester,ubuntu:jammy
-   ```
+1. Add setup directory with 3 files above to your course dev repo
+2. Add your course to the CCC registry (contact admin).
 
 ## Optional Additions
 
-### Custom Scripts in `bin/`
-Students get `./bin` in their PATH automatically:
-```bash
-mkdir bin
-echo '#!/bin/bash\necho "Submitting..."' > bin/submit
-chmod +x bin/submit
-```
+## Course-Specific Images and Installer Commands
 
-### VS Code Integration
-Add this script to open current directory in VS Code from inside container:
-```bash
-#!/bin/bash
-# bin/vscode - Open current directory in host VS Code
-CONTAINER_NAME=$(podman ps --format '{{.Names}}' | grep ccc | head -1)
-CURRENT_PATH="/courses/$(basename $PWD)"
+**Default**: Most courses can use the shared Ubuntu container (write "default" nuder image_mode and leave image_ref empty)
 
-if [ -n "$CONTAINER_NAME" ]; then
-    # Signal host to open VS Code attached to this container
-    echo "Opening VS Code on host for container: $CONTAINER_NAME"
-    echo "Path: $CURRENT_PATH"
-
-    # Method 1: Try direct host command execution
-    podman exec --privileged "$CONTAINER_NAME" sh -c "
-        echo 'code --folder-uri vscode-remote://attached-container+$CONTAINER_NAME$CURRENT_PATH' > /tmp/vscode_cmd
-        nsenter -t 1 -m -p sh -c 'eval \$(cat /tmp/vscode_cmd)'
-    " 2>/dev/null || echo "Run on host: code --folder-uri vscode-remote://attached-container+$CONTAINER_NAME$CURRENT_PATH"
-else
-    echo "No container found. Run 'ccc run <course>' first."
-fi
-```
-
-### Course-Specific Aliases
-Add to `.envrc`:
-```bash
-alias hw1="cd hw1 && code ."
-alias test-hw1="cd hw1 && python3 test.py"
-alias submit-hw1="cd hw1 && ./submit.sh"
-```
-
-### Setup Script (optional)
-Add `setup.sh` for one-time course setup:
-```bash
-#!/bin/bash
-# Install course-specific dependencies
-# Create initial directories
-# Download starter files
-```
-
-## Base Images
-
-**Default**: Most courses use the shared Ubuntu container (leave base_image empty)
-
-**Custom**: For specialized environments (databases, specific languages):
-- `ubuntu:jammy` - Ubuntu 22.04
-- `ubuntu:focal` - Ubuntu 20.04
-- `python:3.11` - Python-focused
-- `node:18` - Node.js environment
+**Course-Specific**: Courses also have the option to provide their own specific image if they desire, along with a custom installation script. CCC will not automatically run this script, however. Courses with unique containers will be run WITHOUT the CCC installer, and students must manually use the custom installation script provided by the course.
 
 ## Student Workflow
 
 Students will:
-1. `ccc setup your-course` (downloads your repo)
-2. `ccc open your-course` (opens the course shell with environment applied)
-3. Work in assignment folders (`hw1/`, `project2/`, etc.)
-4. Use your custom commands/aliases
+1. `ccc open your-course` (opens the course shell with environment applied)
+2. Work in assignment folders (`hw1/`, `project2/`, etc.)
 
 ## Testing
 
@@ -129,9 +74,6 @@ Test your setup:
 ```bash
 # Test CCC environment loading
 ccc open your-course
-
-# Test container
-ccc run your-course
 ```
 
 That's it! Students get a consistent environment with your customizations.
