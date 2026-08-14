@@ -68,7 +68,8 @@ prompt_init() {
     # Interactive init: set CCC_COURSES_DIR and CCC_AUTO_UPDATE
     echo "Initializing CCC configuration..."
     default_courses="$HOME/courses"
-    printf 'Courses directory [%s]: ' "$default_courses"
+    printf 'The default course directory is [%s]: ' "$default_courses"
+    printf '\nEnter the desired location of your courses directory, or skip to choose the default:'
     read -r courses_dir
     if [ -z "$courses_dir" ]; then
         courses_dir="$default_courses"

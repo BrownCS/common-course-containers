@@ -94,31 +94,32 @@ allow_course_specific_base_image() {
   [[ "$mode" == "course-specific" ]]
 }
 
+# mac users fail GID checks, commenting out for now
 validate_container_identity() {
   local image_name="${1:-$IMAGE_NAME}"
   local uid
-  local gid
+  # local gid
   local passwd_entry
-  local group_entry
+  # local group_entry
 
   uid="$(id -u)"
-  gid="$(id -g)"
+  # gid="$(id -g)"
 
   if ! "$CONTAINER_RUNTIME" image exists "$image_name" &>/dev/null; then
     return 0
   fi
 
   passwd_entry="$($CONTAINER_RUNTIME run --rm --entrypoint /bin/sh "$image_name" -lc "grep -E '^[^:]*:[^:]*:${uid}:' /etc/passwd | head -n 1" 2>/dev/null || true)"
-  group_entry="$($CONTAINER_RUNTIME run --rm --entrypoint /bin/sh "$image_name" -lc "grep -E '^[^:]*:[^:]*:${gid}:' /etc/group | head -n 1" 2>/dev/null || true)"
+  # group_entry="$($CONTAINER_RUNTIME run --rm --entrypoint /bin/sh "$image_name" -lc "grep -E '^[^:]*:[^:]*:${gid}:' /etc/group | head -n 1" 2>/dev/null || true)"
 
-  if [[ -n "$passwd_entry" || -n "$group_entry" ]]; then
+  if [ -n "$passwd_entry" ]; then # || -n "$group_entry" ]
     echo_error "Host uid/gid conflict with numeric accounts in image '$image_name'."
     if [[ -n "$passwd_entry" ]]; then
       echo_error "  uid $uid already appears in /etc/passwd: $passwd_entry"
     fi
-    if [[ -n "$group_entry" ]]; then
-      echo_error "  gid $gid already appears in /etc/group: $group_entry"
-    fi
+    # if [[ -n "$group_entry" ]]; then
+      # echo_error "  gid $gid already appears in /etc/group: $group_entry"
+    # fi
     echo_error "Choose a different host account or rebuild the image with non-conflicting ids."
     return 1
   fi

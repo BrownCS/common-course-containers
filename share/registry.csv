@@ -10,7 +10,7 @@
 default,,Default Container,always,true,default,,,,
 csci-0300-demo,https://github.com/ZMTJQ/csci-0300-demo.git,Systems Programming,fall2024,true,default,,,,
 csci-1380-demo,https://github.com/ZMTJQ/csci-1380-demo.git,CSCI 1380,demo,true,default,,,main,Default-container translation of the CS1380 Docker setup for CCC testing.
-csci-1515-demo,https://github.com/ZMTJQ/csci-1515-demo.git,CSCI 1515,demo,true,default,,,main,Default-container translation of the CS1515 Docker setup for CCC testing.
+csci-1515-demo,https://github.com/ZMTJQ/csci-1515-demo.git,CSCI 1515,demo,true,default,,amd64,main,Default-container translation of the CS1515 Docker setup for CCC testing.
 csci-1380-demo2,https://github.com/ZMTJQ/csci-1380-demo.git,CSCI 1380,demo,true,course-specific,ghcr.io/brown-cs1380/container:main,,main,Course-specific CS1380 fixture; CCC manifests intentionally minimal because setup is handled by the course image and stencil repo.
 
 # old examples I (Zach) haven't changed yet
