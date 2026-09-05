@@ -357,18 +357,19 @@ start_or_reuse_container() {
   )
 
   # SSH agent forwarding
-  # - On macOS with Docker Desktop, prefer the host-services socket.
-  # - Otherwise, forward the user's current SSH_AUTH_SOCK when available.
-  local ssh_sock=""
-  if [[ "$(uname)" == "Darwin" ]] && [[ -n "${SSH_AUTH_SOCK:-}" ]] && [[ -e "/run/host-services/ssh-auth.sock" ]]; then
-    ssh_sock="/run/host-services/ssh-auth.sock"
-  elif [[ -n "${SSH_AUTH_SOCK:-}" ]] && [[ -S "${SSH_AUTH_SOCK}" ]]; then
-    ssh_sock="${SSH_AUTH_SOCK}"
-  fi
+  # Temporarily disable SSH agent injection on macOS until the launchd socket path
+  # is handled reliably across Podman installations. This avoids the known failure
+  # mode where a stale /var/run/com.apple.launchd.* path cannot be bind-mounted.
+  if [[ "$(uname)" != "Darwin" ]]; then
+    local ssh_sock=""
+    if [[ -n "${SSH_AUTH_SOCK:-}" ]] && [[ -S "${SSH_AUTH_SOCK}" ]]; then
+      ssh_sock="${SSH_AUTH_SOCK}"
+    fi
 
-  if [[ -n "$ssh_sock" ]]; then
-    run_args+=( -v "$ssh_sock:$ssh_sock" )
-    run_args+=( -e "SSH_AUTH_SOCK=$ssh_sock" )
+    if [[ -n "$ssh_sock" ]]; then
+      run_args+=( -v "$ssh_sock:$ssh_sock" )
+      run_args+=( -e "SSH_AUTH_SOCK=$ssh_sock" )
+    fi
   fi
 
   validate_container_identity "$IMAGE_NAME" || return 1
