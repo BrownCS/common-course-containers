@@ -170,12 +170,18 @@ get_image_name() {
     return
   fi
 
-  local image_mode
+  local image_mode image_ref
   image_mode="$(get_course_image_mode "$course")"
   if [[ "$image_mode" == "course-specific" ]]; then
+    image_ref="$(get_course_image_ref "$course")" || image_ref=""
+    if [[ -n "$image_ref" ]]; then
+      echo "$image_ref"
+      return
+    fi
     echo "ccc-${course}"
-  else
-    echo "${IMAGE_NAME:-ccc}"
+    return
   fi
+
+  echo "${IMAGE_NAME:-ccc}"
 }
 

@@ -154,6 +154,13 @@ build_image() {
   local stamp_file="$SCRIPT_DIR/.ccc-image-buildstamp-${image_name//[^A-Za-z0-9._-]/_}"
   local build_stamp
 
+  # Course-specific registry images are expected to be used directly.
+  # Do not rebuild a CCC-generated Debian image around them.
+  if allow_course_specific_base_image "$course_id"; then
+    echo "Using course-specific image '$image_name'; skipping CCC image rebuild."
+    return 0
+  fi
+
   build_stamp="$(get_image_build_stamp "$image_name")"
 
   # Check if image already exists and matches the current CCC sources.
@@ -167,9 +174,7 @@ build_image() {
 
   # Validate base image unless this is a course-specific base image that the
   # registry explicitly selected for this course.
-  if allow_course_specific_base_image "$course_id"; then
-    :
-  elif ! validate_base_image "$base_image"; then
+  if ! validate_base_image "$base_image"; then
     return 1
   fi
 
